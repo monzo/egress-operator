@@ -1,0 +1,7 @@
+apiVersion: egress.monzo.com/v1
+kind: ExternalService
+metadata:
+  name: externalservice-sample
+spec:
+  # Add fields here
+  foo: bar

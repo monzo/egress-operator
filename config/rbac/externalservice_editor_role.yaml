@@ -1,0 +1,26 @@
+# permissions to do edit externalservices.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: externalservice-editor-role
+rules:
+- apiGroups:
+  - egress.monzo.com
+  resources:
+  - externalservices
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - egress.monzo.com
+  resources:
+  - externalservices/status
+  verbs:
+  - get
+  - patch
+  - update

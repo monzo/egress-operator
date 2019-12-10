@@ -1,0 +1,7 @@
+domain: monzo.com
+repo: github.com/monzo/egress-operator
+resources:
+- group: egress
+  kind: ExternalService
+  version: v1
+version: "2"

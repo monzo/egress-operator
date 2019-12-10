@@ -1,0 +1,20 @@
+# permissions to do viewer externalservices.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: externalservice-viewer-role
+rules:
+- apiGroups:
+  - egress.monzo.com
+  resources:
+  - externalservices
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - egress.monzo.com
+  resources:
+  - externalservices/status
+  verbs:
+  - get
