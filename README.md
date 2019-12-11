@@ -1,5 +1,5 @@
 # egress-operator
-An operator to produce egress gateway pods and control access to them with network policies.
+An operator to produce egress gateway pods and control access to them with network policies, and a coredns plugin to route egress traffic to these pods.
 
 The idea is that instead of authorizing egress traffic with protocol inspection, 
 you instead create a internal clusterIP for every external service you use, lock
@@ -15,13 +15,11 @@ In the `egress-operator-system` namespace, it creates:
 - A service for that deployment
 - A network policy only allowing pods in other namespaces with the label `egress.monzo.com/allowed-gateway: yourservice`
 
-Your dns plugin needs to watch `Service` objects in `egress-operator-system` with the label `app=egress-gateway`,
- and resolve the value of the `egress.monzo.com/dns-name` annotation to the `clusterIP`
-
 Some useful tips:
 
 - `make install` - set up CRD in cluster
 - `make run` - run locally against a remote cluster (create an ExternalService object to see stuff happen)
+- `cd coredns-plugin && make docker` - produce a coredns image that contains the plugin
 
 An example object:
 
@@ -38,4 +36,14 @@ spec:
     protocol: TCP
   # optional, defaults to 3
   replicas: 5
+```
+
+Example CoreDNS config:
+
+```Caddy
+.:53 {
+    egressoperator egress-operator-system cluster.local
+    kubernetes cluster.local
+    forward . /etc/resolv.conf
+}
 ```

@@ -2,8 +2,6 @@ package egressoperator
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/caddyserver/caddy"
@@ -24,11 +22,36 @@ func init() { plugin.Register("egressoperator", setup) }
 func setup(c *caddy.Controller) error {
 	args := c.RemainingArgs()
 
+	var config *rest.Config
+	var err error
+	for c.NextBlock() {
+		if c.Val() == "kubeconfig" {
+			args := c.RemainingArgs()
+			if len(args) == 2 {
+				config, err = clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+					&clientcmd.ClientConfigLoadingRules{ExplicitPath: args[0]},
+					&clientcmd.ConfigOverrides{CurrentContext: args[1]},
+				).ClientConfig()
+				if err != nil {
+					return err
+				}
+				break
+			}
+			return c.ArgErr()
+		}
+	}
+	if config == nil {
+		config, err = rest.InClusterConfig()
+		if err != nil {
+			return err
+		}
+	}
+
 	if len(args) < 3 {
 		return fmt.Errorf("must provide args in format 'egressoperator yournamespace cluster.local', got %v", args)
 	}
 
-	client, err := k8sClientset()
+	client, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return err
 	}
@@ -60,27 +83,4 @@ func setup(c *caddy.Controller) error {
 	})
 
 	return nil
-}
-
-func k8sClientset() (*kubernetes.Clientset, error) {
-	var config *rest.Config
-	if os.Getenv("KUBERNETES_SERVICE_HOST") != "" { // inside a k8s cluster
-		cfg, err := rest.InClusterConfig()
-		if err != nil {
-			return nil, err
-		}
-		config = cfg
-	} else { // outside a k8s cluster, use kubeconfig
-
-		kubeconfigPath := os.Getenv("KUBECONFIG")
-		if kubeconfigPath == "" {
-			kubeconfigPath = filepath.Join(os.Getenv("HOME"), ".kube", "config")
-		}
-		cfg, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
-		if err != nil {
-			return nil, err
-		}
-		config = cfg
-	}
-	return kubernetes.NewForConfig(config)
 }
