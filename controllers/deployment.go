@@ -31,6 +31,7 @@ func (r *ExternalServiceReconciler) reconcileDeployment(ctx context.Context, req
 	patched := d.DeepCopy()
 	patched.Labels = desired.Labels
 	patched.Annotations = desired.Annotations
+	patched.Annotations["deployment.kubernetes.io/revision"] = d.Annotations["deployment.kubernetes.io/revision"]
 	patched.Spec = desired.Spec
 
 	return ignoreNotFound(r.Client.Patch(ctx, patched, client.MergeFrom(d)))

@@ -30,6 +30,8 @@ metadata:
   name: google
 spec:
   dnsName: google.com
+  # optional, defaults to false, instructs dns server to rewrite queries for dnsName
+  hijackDns: true
   ports:
   - port: 443
     # optional, defaults to TCP

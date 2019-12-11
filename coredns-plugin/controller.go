@@ -82,7 +82,10 @@ func newdnsController(kubeClient kubernetes.Interface, namespace, zone string, r
 		rulesCallback(rules)
 	}, cache.MetaNamespaceKeyFunc)
 
-	s := labels.SelectorFromSet(map[string]string{"app": "egress-gateway"})
+	s := labels.SelectorFromSet(map[string]string{
+		"app":                         "egress-gateway",
+		"egress.monzo.com/hijack-dns": "true",
+	})
 
 	dns.reflector = cache.NewReflector(&cache.ListWatch{
 		ListFunc:  serviceListFunc(kubeClient, namespace, s),

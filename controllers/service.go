@@ -55,11 +55,15 @@ func servicePorts(es *egressv1.ExternalService) (ports []corev1.ServicePort) {
 }
 
 func service(es *egressv1.ExternalService) *corev1.Service {
+	l := labels(es)
+	if es.Spec.HijackDns {
+		l["egress.monzo.com/hijack-dns"] = "true"
+	}
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        es.Name,
 			Namespace:   namespace,
-			Labels:      labels(es),
+			Labels:      l,
 			Annotations: annotations(es),
 		},
 		Spec: corev1.ServiceSpec{

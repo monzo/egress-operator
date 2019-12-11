@@ -56,8 +56,8 @@ func (r *ExternalServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 
 	req.Namespace = namespace
 
-	if err := r.reconcileService(ctx, req, es); err != nil {
-		log.Error(err, "unable to reconcile Service")
+	if err := r.reconcileDeployment(ctx, req, es); err != nil {
+		log.Error(err, "unable to reconcile Deployment")
 		return ctrl.Result{}, err
 	}
 
@@ -71,8 +71,8 @@ func (r *ExternalServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 		return ctrl.Result{}, err
 	}
 
-	if err := r.reconcileDeployment(ctx, req, es); err != nil {
-		log.Error(err, "unable to reconcile Deployment")
+	if err := r.reconcileService(ctx, req, es); err != nil {
+		log.Error(err, "unable to reconcile Service")
 		return ctrl.Result{}, err
 	}
 

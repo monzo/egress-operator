@@ -37,6 +37,10 @@ type ExternalServiceSpec struct {
 	// Replicas is the number of gateways to run. Defaults to 3
 	// +optional
 	Replicas int32 `json:"replicas,omitempty"`
+
+	// If true, add a `egress.monzo.com/hijack-dns: true` label to produced Service objects
+	// CoreDNS can watch this label and decide to rewrite DnsName -> clusterIP
+	HijackDns bool `json:"hijackDns,omitempty"`
 }
 
 type ExternalServicePort struct {
