@@ -16,6 +16,7 @@ limitations under the License.
 package v1
 
 import (
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -27,17 +28,36 @@ type ExternalServiceSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of ExternalService. Edit ExternalService_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// DnsName is a DNS name target for the external service
+	DnsName string `json:"dnsName,omitempty"`
+
+	// Ports is a list of ports on which the external service may be called
+	Ports []ExternalServicePort `json:"ports,omitempty"`
+
+	// Replicas is the number of gateways to run. Defaults to 3
+	// +optional
+	Replicas int32 `json:"replicas,omitempty"`
+}
+
+type ExternalServicePort struct {
+	// The protocol (TCP or UDP) which traffic must match. If not specified, this
+	// field defaults to TCP.
+	// +optional
+	Protocol *v1.Protocol `json:"protocol,omitempty"`
+
+	// The port on the given protocol.
+	Port int32 `json:"port,omitempty"`
 }
 
 // ExternalServiceStatus defines the observed state of ExternalService
 type ExternalServiceStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+	ClusterIP string `json:"clusterIP,omitempty"`
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:resource:scope=Cluster
 
 // ExternalService is the Schema for the externalservices API
 type ExternalService struct {

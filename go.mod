@@ -6,6 +6,7 @@ require (
 	github.com/envoyproxy/go-control-plane v0.9.2-0.20191209214638-ccc55b462344
 	github.com/go-logr/logr v0.1.0
 	github.com/golang/protobuf v1.3.2
+	github.com/google/go-cmp v0.3.0
 	github.com/onsi/ginkgo v1.8.0
 	github.com/onsi/gomega v1.5.0
 	k8s.io/api v0.0.0-20190918155943-95b840bb6a1f
