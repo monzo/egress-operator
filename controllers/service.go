@@ -27,6 +27,8 @@ func (r *ExternalServiceReconciler) reconcileService(ctx context.Context, req ct
 	}
 
 	patched := s.DeepCopy()
+	patched.Labels = desired.Labels
+	patched.Annotations = desired.Annotations
 	patched.Spec = desired.Spec
 	patched.Spec.ClusterIP = s.Spec.ClusterIP
 

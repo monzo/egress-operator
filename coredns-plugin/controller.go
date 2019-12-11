@@ -52,6 +52,7 @@ func newdnsController(kubeClient kubernetes.Interface, namespace, zone string, r
 
 			from, ok := svc.Annotations["egress.monzo.com/dns-name"]
 			if !ok {
+				log.Warningf("%s is missing dns-name annotation", svc.Name)
 				continue
 			}
 
@@ -67,8 +68,8 @@ func newdnsController(kubeClient kubernetes.Interface, namespace, zone string, r
 
 			rules = append(rules, &exactNameRule{
 				NextAction: "stop",
-				From:       from,
-				To:         to,
+				From:       rewriteQuestionFrom,
+				To:         rewriteQuestionTo,
 				ResponseRule: rewrite.ResponseRule{
 					Active:      true,
 					Type:        "name",

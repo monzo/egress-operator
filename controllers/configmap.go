@@ -42,6 +42,8 @@ func (r *ExternalServiceReconciler) reconcileConfigMap(ctx context.Context, req 
 	}
 
 	patched := c.DeepCopy()
+	patched.Labels = desired.Labels
+	patched.Annotations = desired.Annotations
 	patched.Data = desired.Data
 
 	return ignoreNotFound(r.Client.Patch(ctx, patched, client.MergeFrom(c)))

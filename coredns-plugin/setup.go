@@ -2,7 +2,6 @@ package egressoperator
 
 import (
 	"fmt"
-	"k8s.io/client-go/tools/clientcmd"
 	"os"
 	"path/filepath"
 	"time"
@@ -10,9 +9,13 @@ import (
 	"github.com/caddyserver/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
+	clog "github.com/coredns/coredns/plugin/pkg/log"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
+
+var log = clog.NewWithPlugin("egressoperator")
 
 // init registers this plugin.
 func init() { plugin.Register("egressoperator", setup) }
@@ -21,7 +24,7 @@ func init() { plugin.Register("egressoperator", setup) }
 func setup(c *caddy.Controller) error {
 	args := c.RemainingArgs()
 
-	if len(args) < 2 {
+	if len(args) < 3 {
 		return fmt.Errorf("must provide args in format 'egressoperator yournamespace cluster.local', got %v", args)
 	}
 
@@ -32,7 +35,7 @@ func setup(c *caddy.Controller) error {
 
 	o := &EgressOperator{}
 
-	controller := newdnsController(client, args[0], args[1], o.setRules)
+	controller := newdnsController(client, args[1], args[2], o.setRules)
 
 	c.OnStartup(func() error {
 		go controller.Run()
