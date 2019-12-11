@@ -23,7 +23,7 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;create;patch
+// +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;patch
 
 func (r *ExternalServiceReconciler) reconcileConfigMap(ctx context.Context, req ctrl.Request, es *egressv1.ExternalService) error {
 	desired, err := configmap(es)
@@ -44,7 +44,7 @@ func (r *ExternalServiceReconciler) reconcileConfigMap(ctx context.Context, req 
 	patched := c.DeepCopy()
 	patched.Data = desired.Data
 
-	return r.Client.Patch(ctx, patched, client.MergeFrom(c))
+	return ignoreNotFound(r.Client.Patch(ctx, patched, client.MergeFrom(c)))
 }
 
 func protocolToEnvoy(p *corev1.Protocol) envoycorev2.SocketAddress_Protocol {
@@ -182,9 +182,10 @@ func configmap(es *egressv1.ExternalService) (*corev1.ConfigMap, error) {
 	}
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      es.Name,
-			Namespace: namespace,
-			Labels:    labels(es),
+			Name:        es.Name,
+			Namespace:   namespace,
+			Labels:      labels(es),
+			Annotations: annotations(es),
 		},
 		Data: map[string]string{"envoy.yaml": ec},
 	}, nil

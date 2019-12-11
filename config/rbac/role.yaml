@@ -13,7 +13,9 @@ rules:
   verbs:
   - create
   - get
+  - list
   - patch
+  - watch
 - apiGroups:
   - ""
   resources:
@@ -21,7 +23,9 @@ rules:
   verbs:
   - create
   - get
+  - list
   - patch
+  - watch
 - apiGroups:
   - ""
   resources:
@@ -29,7 +33,9 @@ rules:
   verbs:
   - create
   - get
+  - list
   - patch
+  - watch
 - apiGroups:
   - egress.monzo.com
   resources:
@@ -51,10 +57,12 @@ rules:
   - patch
   - update
 - apiGroups:
-  - networking
+  - networking.k8s.io
   resources:
   - networkpolicies
   verbs:
   - create
   - get
+  - list
   - patch
+  - watch

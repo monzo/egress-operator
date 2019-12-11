@@ -13,7 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;create;patch
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;patch
 
 func (r *ExternalServiceReconciler) reconcileDeployment(ctx context.Context, req ctrl.Request, es *egressv1.ExternalService) error {
 	desired := deployment(es)
@@ -31,7 +31,7 @@ func (r *ExternalServiceReconciler) reconcileDeployment(ctx context.Context, req
 	patched := d.DeepCopy()
 	patched.Spec = desired.Spec
 
-	return r.Client.Patch(ctx, patched, client.MergeFrom(d))
+	return ignoreNotFound(r.Client.Patch(ctx, patched, client.MergeFrom(d)))
 }
 
 func replicas(es *egressv1.ExternalService) int32 {
@@ -65,9 +65,10 @@ func deployment(es *egressv1.ExternalService) *appsv1.Deployment {
 
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      es.Name,
-			Namespace: namespace,
-			Labels:    labels(es),
+			Name:        es.Name,
+			Namespace:   namespace,
+			Labels:      labels(es),
+			Annotations: annotations(es),
 		},
 		Spec: appsv1.DeploymentSpec{
 			Selector: metav1.SetAsLabelSelector(labelsToSelect(es)),

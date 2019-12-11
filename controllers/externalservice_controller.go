@@ -47,8 +47,11 @@ func (r *ExternalServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 
 	es := &egressv1.ExternalService{}
 	if err := r.Get(ctx, req.NamespacedName, es); err != nil {
+		if apierrs.IsNotFound(err) {
+			return ctrl.Result{}, nil
+		}
 		log.Error(err, "unable to fetch ExternalService")
-		return ctrl.Result{}, ignoreNotFound(err)
+		return ctrl.Result{}, err
 	}
 
 	req.Namespace = namespace
@@ -80,6 +83,12 @@ func labels(es *egressv1.ExternalService) map[string]string {
 	return map[string]string{
 		"app":                      "egress-gateway",
 		"egress.monzo.com/gateway": es.Name,
+	}
+}
+
+func annotations(es *egressv1.ExternalService) map[string]string {
+	return map[string]string{
+		"egress.monzo.com/dns-name": es.Spec.DnsName,
 	}
 }
 

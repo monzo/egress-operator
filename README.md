@@ -15,8 +15,8 @@ In the `egress-operator-system` namespace, it creates:
 - A service for that deployment
 - A network policy only allowing pods in other namespaces with the label `egress.monzo.com/allowed-gateway: yourservice`
 
-The status of each ExternalService will be updated with the `clusterIP` of the underlying Service object,
-so your dns plugin need only watch those objects, and resolve `dnsName` to `clusterIP`
+Your dns plugin needs to watch `Service` objects in `egress-operator-system` with the label `app=egress-gateway`,
+ and resolve the value of the `egress.monzo.com/dns-name` annotation to the `clusterIP`
 
 Some useful tips:
 
