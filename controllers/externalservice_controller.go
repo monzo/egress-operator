@@ -18,8 +18,6 @@ package controllers
 import (
 	"bytes"
 	"context"
-	"fmt"
-
 	"github.com/go-logr/logr"
 	egressv1 "github.com/monzo/egress-operator/api/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -133,6 +131,5 @@ func (r *ExternalServiceReconciler) patchIfNecessary(ctx context.Context, obj ru
 		return nil
 	}
 
-	fmt.Println(string(data))
 	return r.Client.Patch(ctx, obj, patch, opts...)
 }

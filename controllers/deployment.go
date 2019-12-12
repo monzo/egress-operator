@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/golang/protobuf/proto"
 	egressv1 "github.com/monzo/egress-operator/api/v1"
@@ -67,8 +68,10 @@ func deploymentPorts(es *egressv1.ExternalService) (ports []corev1.ContainerPort
 
 func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deployment {
 	r := replicas(es)
+	adPort := adminPort(es)
 	a := annotations(es)
 	a["egress.monzo.com/config-hash"] = configHash
+	a["egress.monzo.com/admin-port"] = strconv.Itoa(int(adPort))
 
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -84,8 +87,8 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 			Strategy: appsv1.DeploymentStrategy{
 				Type: appsv1.RollingUpdateDeploymentStrategyType,
 				RollingUpdate: &appsv1.RollingUpdateDeployment{
-					MaxUnavailable: intstr.ValueOrDefault(nil, intstr.FromInt(25)),
-					MaxSurge:       intstr.ValueOrDefault(nil, intstr.FromInt(25)),
+					MaxUnavailable: intstr.ValueOrDefault(nil, intstr.FromString("25%")),
+					MaxSurge:       intstr.ValueOrDefault(nil, intstr.FromString("25%")),
 				},
 			},
 			Selector: metav1.SetAsLabelSelector(labelsToSelect(es)),
@@ -97,7 +100,6 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							// TODO: readiness check
 							Name: "gateway",
 							// TODO this version doesn't actually support UDP, we need 1.13 which isn't stable
 							Image:           "envoyproxy/envoy-alpine:v1.12.2",
@@ -111,6 +113,19 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 							},
 							TerminationMessagePath:   corev1.TerminationMessagePathDefault,
 							TerminationMessagePolicy: corev1.TerminationMessageReadFile,
+							ReadinessProbe: &corev1.Probe{
+								Handler: corev1.Handler{
+									HTTPGet: &corev1.HTTPGetAction{
+										Path:   "/ready",
+										Port:   intstr.FromInt(int(adPort)),
+										Scheme: corev1.URISchemeHTTP,
+									},
+								},
+								FailureThreshold: 3,
+								PeriodSeconds:    10,
+								SuccessThreshold: 1,
+								TimeoutSeconds:   1,
+							},
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
 									"cpu":    resource.MustParse("100m"),

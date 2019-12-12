@@ -22,7 +22,13 @@ func Test_envoyConfig(t *testing.T) {
 	}{
 		{
 			name: "udp and tcp",
-			want: `node:
+			want: `admin:
+  accessLogPath: /dev/stdout
+  address:
+    socketAddress:
+      address: 0.0.0.0
+      portValue: 11000
+node:
   cluster: foo
 staticResources:
   clusters:

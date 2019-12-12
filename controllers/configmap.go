@@ -59,10 +59,40 @@ func protocolToEnvoy(p *corev1.Protocol) envoycorev2.SocketAddress_Protocol {
 	}
 }
 
+func adminPort(es *egressv1.ExternalService) int32 {
+	disallowed := map[int32]struct{}{}
+
+	for _, p := range es.Spec.Ports {
+		if p.Protocol == nil || *p.Protocol == corev1.ProtocolTCP {
+			disallowed[p.Port] = struct{}{}
+		}
+	}
+
+	for i := int32(11000); i < 32768; i++ {
+		if _, ok := disallowed[i]; !ok {
+			return i
+		}
+	}
+
+	panic("couldn't find a port for admin listener")
+}
+
 func envoyConfig(es *egressv1.ExternalService) (string, error) {
 	config := bootstrapv2.Bootstrap{
 		Node: &envoycorev2.Node{
 			Cluster: es.Name,
+		},
+		Admin: &bootstrapv2.Admin{
+			Address: &envoycorev2.Address{Address: &envoycorev2.Address_SocketAddress{
+				SocketAddress: &envoycorev2.SocketAddress{
+					Address:  "0.0.0.0",
+					Protocol: envoycorev2.SocketAddress_TCP,
+					PortSpecifier: &envoycorev2.SocketAddress_PortValue{
+						PortValue: uint32(adminPort(es)),
+					},
+				},
+			}},
+			AccessLogPath: "/dev/stdout",
 		},
 		StaticResources: &bootstrapv2.Bootstrap_StaticResources{},
 	}

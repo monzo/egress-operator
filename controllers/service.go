@@ -2,6 +2,9 @@ package controllers
 
 import (
 	"context"
+	"fmt"
+	"strconv"
+	"strings"
 
 	egressv1 "github.com/monzo/egress-operator/api/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -46,6 +49,7 @@ func servicePorts(es *egressv1.ExternalService) (ports []corev1.ServicePort) {
 		}
 
 		ports = append(ports, corev1.ServicePort{
+			Name:       fmt.Sprintf("%s-%s-%s", es.Name, strings.ToLower(string(p)), strconv.Itoa(int(port.Port))),
 			Protocol:   p,
 			Port:       port.Port,
 			TargetPort: intstr.FromInt(int(port.Port)),
