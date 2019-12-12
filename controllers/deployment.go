@@ -3,20 +3,22 @@ package controllers
 import (
 	"context"
 
+	"github.com/golang/protobuf/proto"
 	egressv1 "github.com/monzo/egress-operator/api/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;patch
 
-func (r *ExternalServiceReconciler) reconcileDeployment(ctx context.Context, req ctrl.Request, es *egressv1.ExternalService) error {
-	desired := deployment(es)
+func (r *ExternalServiceReconciler) reconcileDeployment(ctx context.Context, req ctrl.Request, es *egressv1.ExternalService, configHash string) error {
+	desired := deployment(es, configHash)
 	if err := ctrl.SetControllerReference(es, desired, r.Scheme); err != nil {
 		return err
 	}
@@ -34,7 +36,7 @@ func (r *ExternalServiceReconciler) reconcileDeployment(ctx context.Context, req
 	patched.Annotations["deployment.kubernetes.io/revision"] = d.Annotations["deployment.kubernetes.io/revision"]
 	patched.Spec = desired.Spec
 
-	return ignoreNotFound(r.Client.Patch(ctx, patched, client.MergeFrom(d)))
+	return ignoreNotFound(r.patchIfNecessary(ctx, patched, client.MergeFrom(d)))
 }
 
 func replicas(es *egressv1.ExternalService) int32 {
@@ -63,8 +65,10 @@ func deploymentPorts(es *egressv1.ExternalService) (ports []corev1.ContainerPort
 	return
 }
 
-func deployment(es *egressv1.ExternalService) *appsv1.Deployment {
+func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deployment {
 	r := replicas(es)
+	a := annotations(es)
+	a["egress.monzo.com/config-hash"] = configHash
 
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -74,11 +78,21 @@ func deployment(es *egressv1.ExternalService) *appsv1.Deployment {
 			Annotations: annotations(es),
 		},
 		Spec: appsv1.DeploymentSpec{
+			ProgressDeadlineSeconds: proto.Int(600),
+			Replicas:                &r,
+			RevisionHistoryLimit:    proto.Int(10),
+			Strategy: appsv1.DeploymentStrategy{
+				Type: appsv1.RollingUpdateDeploymentStrategyType,
+				RollingUpdate: &appsv1.RollingUpdateDeployment{
+					MaxUnavailable: intstr.ValueOrDefault(nil, intstr.FromInt(25)),
+					MaxSurge:       intstr.ValueOrDefault(nil, intstr.FromInt(25)),
+				},
+			},
 			Selector: metav1.SetAsLabelSelector(labelsToSelect(es)),
-			Replicas: &r,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: labels(es),
+					Labels:      labels(es),
+					Annotations: a,
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
@@ -86,14 +100,17 @@ func deployment(es *egressv1.ExternalService) *appsv1.Deployment {
 							// TODO: readiness check
 							Name: "gateway",
 							// TODO this version doesn't actually support UDP, we need 1.13 which isn't stable
-							Image: "envoyproxy/envoy-alpine:v1.12.2",
-							Ports: deploymentPorts(es),
+							Image:           "envoyproxy/envoy-alpine:v1.12.2",
+							ImagePullPolicy: corev1.PullIfNotPresent,
+							Ports:           deploymentPorts(es),
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "envoy-config",
 									MountPath: "/etc/envoy",
 								},
 							},
+							TerminationMessagePath:   corev1.TerminationMessagePathDefault,
+							TerminationMessagePolicy: corev1.TerminationMessageReadFile,
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
 									"cpu":    resource.MustParse("100m"),
@@ -106,11 +123,17 @@ func deployment(es *egressv1.ExternalService) *appsv1.Deployment {
 							},
 						},
 					},
+					RestartPolicy:                 corev1.RestartPolicyAlways,
+					SchedulerName:                 corev1.DefaultSchedulerName,
+					SecurityContext:               &corev1.PodSecurityContext{},
+					TerminationGracePeriodSeconds: proto.Int64(30),
+					DNSPolicy:                     corev1.DNSDefault,
 					Volumes: []corev1.Volume{
 						{
 							Name: "envoy-config",
 							VolumeSource: corev1.VolumeSource{
 								ConfigMap: &corev1.ConfigMapVolumeSource{
+									DefaultMode: proto.Int(420),
 									LocalObjectReference: corev1.LocalObjectReference{
 										Name: es.Name,
 									},

@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
 	"strconv"
 
 	envoyv2 "github.com/envoyproxy/go-control-plane/envoy/api/v2"
@@ -25,11 +26,7 @@ import (
 
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;patch
 
-func (r *ExternalServiceReconciler) reconcileConfigMap(ctx context.Context, req ctrl.Request, es *egressv1.ExternalService) error {
-	desired, err := configmap(es)
-	if err != nil {
-		return err
-	}
+func (r *ExternalServiceReconciler) reconcileConfigMap(ctx context.Context, req ctrl.Request, es *egressv1.ExternalService, desired *corev1.ConfigMap) error {
 	if err := ctrl.SetControllerReference(es, desired, r.Scheme); err != nil {
 		return err
 	}
@@ -46,7 +43,7 @@ func (r *ExternalServiceReconciler) reconcileConfigMap(ctx context.Context, req 
 	patched.Annotations = desired.Annotations
 	patched.Data = desired.Data
 
-	return ignoreNotFound(r.Client.Patch(ctx, patched, client.MergeFrom(c)))
+	return ignoreNotFound(r.patchIfNecessary(ctx, patched, client.MergeFrom(c)))
 }
 
 func protocolToEnvoy(p *corev1.Protocol) envoycorev2.SocketAddress_Protocol {
@@ -177,11 +174,15 @@ func envoyConfig(es *egressv1.ExternalService) (string, error) {
 	return string(y), nil
 }
 
-func configmap(es *egressv1.ExternalService) (*corev1.ConfigMap, error) {
+func configmap(es *egressv1.ExternalService) (*corev1.ConfigMap, string, error) {
 	ec, err := envoyConfig(es)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
+	h := fnv.New32a()
+	h.Write([]byte(ec))
+	sum := h.Sum32()
+
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        es.Name,
@@ -190,5 +191,5 @@ func configmap(es *egressv1.ExternalService) (*corev1.ConfigMap, error) {
 			Annotations: annotations(es),
 		},
 		Data: map[string]string{"envoy.yaml": ec},
-	}, nil
+	}, fmt.Sprintf("%x", sum), nil
 }

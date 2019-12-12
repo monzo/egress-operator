@@ -4,6 +4,7 @@ import (
 	"context"
 
 	egressv1 "github.com/monzo/egress-operator/api/v1"
+	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	v1 "k8s.io/api/networking/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
@@ -33,15 +34,20 @@ func (r *ExternalServiceReconciler) reconcileNetworkPolicy(ctx context.Context, 
 	patched.Annotations = desired.Annotations
 	patched.Spec = desired.Spec
 
-	return ignoreNotFound(r.Client.Patch(ctx, patched, client.MergeFrom(np)))
+	return ignoreNotFound(r.patchIfNecessary(ctx, patched, client.MergeFrom(np)))
 }
 
 func networkPolicyPorts(es *egressv1.ExternalService) (ports []networkingv1.NetworkPolicyPort) {
 	for _, port := range es.Spec.Ports {
 		p := intstr.FromInt(int(port.Port))
+		proto := port.Protocol
+		if proto == nil {
+			t := corev1.ProtocolTCP
+			proto = &t
+		}
 
 		ports = append(ports, networkingv1.NetworkPolicyPort{
-			Protocol: port.Protocol,
+			Protocol: proto,
 			Port:     &p,
 		})
 	}
@@ -75,6 +81,7 @@ func networkPolicy(es *egressv1.ExternalService) *networkingv1.NetworkPolicy {
 					Ports: networkPolicyPorts(es),
 				},
 			},
+			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 		},
 	}
 }

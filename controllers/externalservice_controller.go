@@ -16,7 +16,9 @@ limitations under the License.
 package controllers
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 
 	"github.com/go-logr/logr"
 	egressv1 "github.com/monzo/egress-operator/api/v1"
@@ -56,18 +58,22 @@ func (r *ExternalServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 
 	req.Namespace = namespace
 
-	if err := r.reconcileDeployment(ctx, req, es); err != nil {
+	desiredConfigMap, configHash, err := configmap(es)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if err := r.reconcileConfigMap(ctx, req, es, desiredConfigMap); err != nil {
+		log.Error(err, "unable to reconcile ConfigMap")
+		return ctrl.Result{}, err
+	}
+
+	if err := r.reconcileDeployment(ctx, req, es, configHash); err != nil {
 		log.Error(err, "unable to reconcile Deployment")
 		return ctrl.Result{}, err
 	}
 
 	if err := r.reconcileNetworkPolicy(ctx, req, es); err != nil {
 		log.Error(err, "unable to reconcile NetworkPolicy")
-		return ctrl.Result{}, err
-	}
-
-	if err := r.reconcileConfigMap(ctx, req, es); err != nil {
-		log.Error(err, "unable to reconcile ConfigMap")
 		return ctrl.Result{}, err
 	}
 
@@ -113,4 +119,20 @@ func ignoreNotFound(err error) error {
 		return nil
 	}
 	return err
+}
+
+var emptyPatch = []byte("{}")
+
+func (r *ExternalServiceReconciler) patchIfNecessary(ctx context.Context, obj runtime.Object, patch client.Patch, opts ...client.PatchOption) error {
+	data, err := patch.Data(obj)
+	if err != nil {
+		return err
+	}
+
+	if bytes.Equal(data, emptyPatch) {
+		return nil
+	}
+
+	fmt.Println(string(data))
+	return r.Client.Patch(ctx, obj, patch, opts...)
 }

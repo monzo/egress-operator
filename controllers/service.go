@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+
 	egressv1 "github.com/monzo/egress-operator/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
@@ -32,7 +33,7 @@ func (r *ExternalServiceReconciler) reconcileService(ctx context.Context, req ct
 	patched.Spec = desired.Spec
 	patched.Spec.ClusterIP = s.Spec.ClusterIP
 
-	return ignoreNotFound(r.Client.Patch(ctx, patched, client.MergeFrom(s)))
+	return ignoreNotFound(r.patchIfNecessary(ctx, patched, client.MergeFrom(s)))
 }
 
 func servicePorts(es *egressv1.ExternalService) (ports []corev1.ServicePort) {
@@ -59,6 +60,7 @@ func service(es *egressv1.ExternalService) *corev1.Service {
 	if es.Spec.HijackDns {
 		l["egress.monzo.com/hijack-dns"] = "true"
 	}
+
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        es.Name,
@@ -67,8 +69,10 @@ func service(es *egressv1.ExternalService) *corev1.Service {
 			Annotations: annotations(es),
 		},
 		Spec: corev1.ServiceSpec{
-			Selector: labelsToSelect(es),
-			Ports:    servicePorts(es),
+			Selector:        labelsToSelect(es),
+			Ports:           servicePorts(es),
+			SessionAffinity: corev1.ServiceAffinityNone,
+			Type:            corev1.ServiceTypeClusterIP,
 		},
 	}
 }
