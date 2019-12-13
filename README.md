@@ -20,7 +20,7 @@ Some useful tips:
 
 - `make install` - set up CRD in cluster
 - `make run` - run locally against a remote cluster (create an ExternalService object to see stuff happen)
-- `cd coredns-plugin && make docker` - produce a coredns image that contains the plugin
+- `cd coredns-plugin && make docker-build` - produce a coredns image that contains the plugin
 
 An example object:
 
