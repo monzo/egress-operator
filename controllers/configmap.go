@@ -9,11 +9,13 @@ import (
 	envoyv2 "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	envoycorev2 "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	envoylistener "github.com/envoyproxy/go-control-plane/envoy/api/v2/listener"
+	accesslogv2 "github.com/envoyproxy/go-control-plane/envoy/config/accesslog/v2"
 	bootstrapv2 "github.com/envoyproxy/go-control-plane/envoy/config/bootstrap/v2"
+	accesslogfilterv2 "github.com/envoyproxy/go-control-plane/envoy/config/filter/accesslog/v2"
 	tcpproxyv2 "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/tcp_proxy/v2"
 	udpproxyv2 "github.com/envoyproxy/go-control-plane/envoy/config/filter/udp/udp_proxy/v2alpha"
-	"github.com/envoyproxy/go-control-plane/pkg/conversion"
 	"github.com/golang/protobuf/jsonpb"
+	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/duration"
 	egressv1 "github.com/monzo/egress-operator/api/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -128,7 +130,15 @@ func envoyConfig(es *egressv1.ExternalService) (string, error) {
 		var listener *envoyv2.Listener
 		switch protocol {
 		case envoycorev2.SocketAddress_TCP:
-			filterConfig, err := conversion.MessageToStruct(&tcpproxyv2.TcpProxy{
+			accessConfig, err := ptypes.MarshalAny(&accesslogv2.FileAccessLog{
+				Path: "/dev/stdout",
+			})
+
+			filterConfig, err := ptypes.MarshalAny(&tcpproxyv2.TcpProxy{
+				AccessLog: []*accesslogfilterv2.AccessLog{{
+					Name:       "envoy.file_access_log",
+					ConfigType: &accesslogfilterv2.AccessLog_TypedConfig{TypedConfig: accessConfig},
+				}},
 				StatPrefix: "tcp_proxy",
 				ClusterSpecifier: &tcpproxyv2.TcpProxy_Cluster{
 					Cluster: name,
@@ -151,12 +161,12 @@ func envoyConfig(es *egressv1.ExternalService) (string, error) {
 				FilterChains: []*envoylistener.FilterChain{{
 					Filters: []*envoylistener.Filter{{
 						Name: "envoy.tcp_proxy",
-						ConfigType: &envoylistener.Filter_Config{
-							Config: filterConfig,
+						ConfigType: &envoylistener.Filter_TypedConfig{
+							TypedConfig: filterConfig,
 						}}}}},
 			}
 		case envoycorev2.SocketAddress_UDP:
-			filterConfig, err := conversion.MessageToStruct(&udpproxyv2.UdpProxyConfig{
+			filterConfig, err := ptypes.MarshalAny(&udpproxyv2.UdpProxyConfig{
 				StatPrefix: "udp_proxy",
 				RouteSpecifier: &udpproxyv2.UdpProxyConfig_Cluster{
 					Cluster: name,
@@ -179,8 +189,8 @@ func envoyConfig(es *egressv1.ExternalService) (string, error) {
 				FilterChains: []*envoylistener.FilterChain{{
 					Filters: []*envoylistener.Filter{{
 						Name: "envoy.filters.udp_listener.udp_proxy",
-						ConfigType: &envoylistener.Filter_Config{
-							Config: filterConfig,
+						ConfigType: &envoylistener.Filter_TypedConfig{
+							TypedConfig: filterConfig,
 						}}}}},
 			}
 		}

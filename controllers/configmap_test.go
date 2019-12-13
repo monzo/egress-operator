@@ -57,10 +57,11 @@ staticResources:
         protocol: UDP
     filterChains:
     - filters:
-      - config:
+      - name: envoy.filters.udp_listener.udp_proxy
+        typedConfig:
+          '@type': type.googleapis.com/envoy.config.filter.udp.udp_proxy.v2alpha.UdpProxyConfig
           cluster: foo_UDP_100
-          stat_prefix: udp_proxy
-        name: envoy.filters.udp_listener.udp_proxy
+          statPrefix: udp_proxy
     name: foo_UDP_100
   - address:
       socketAddress:
@@ -68,10 +69,16 @@ staticResources:
         portValue: 101
     filterChains:
     - filters:
-      - config:
+      - name: envoy.tcp_proxy
+        typedConfig:
+          '@type': type.googleapis.com/envoy.config.filter.network.tcp_proxy.v2.TcpProxy
+          accessLog:
+          - name: envoy.file_access_log
+            typedConfig:
+              '@type': type.googleapis.com/envoy.config.accesslog.v2.FileAccessLog
+              path: /dev/stdout
           cluster: foo_TCP_101
-          stat_prefix: tcp_proxy
-        name: envoy.tcp_proxy
+          statPrefix: tcp_proxy
     name: foo_TCP_101
 `,
 			args: args{
