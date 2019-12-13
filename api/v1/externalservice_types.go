@@ -34,9 +34,13 @@ type ExternalServiceSpec struct {
 	// Ports is a list of ports on which the external service may be called
 	Ports []ExternalServicePort `json:"ports,omitempty"`
 
-	// Replicas is the number of gateways to run. Defaults to 3
+	// MinReplicas is the minimum number of gateways to run. Defaults to 3
 	// +optional
-	Replicas int32 `json:"replicas,omitempty"`
+	MinReplicas *int32 `json:"minReplicas,omitempty"`
+
+	// MaxReplicas is the maximum number of gateways to run, enforced by HorizontalPodAutoscaler. Defaults to 12
+	// +optional
+	MaxReplicas *int32 `json:"maxReplicas,omitempty"`
 
 	// If true, add a `egress.monzo.com/hijack-dns: true` label to produced Service objects
 	// CoreDNS can watch this label and decide to rewrite DnsName -> clusterIP

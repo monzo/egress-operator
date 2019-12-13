@@ -17,6 +17,16 @@ rules:
   - patch
   - watch
 - apiGroups:
+  - autoscaling
+  resources:
+  - horizontalpodautoscalers
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - watch
+- apiGroups:
   - ""
   resources:
   - configmaps

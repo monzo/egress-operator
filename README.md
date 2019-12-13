@@ -12,6 +12,7 @@ The operator accepts ExternalService objects, which aren't namespaced, which def
 In the `egress-operator-system` namespace, it creates:
 - An envoy configmap for a TCP/UDP proxy to that service
 - A deployment for some envoy pods with that config
+- A horizontal pod autoscaler to keep the deployment correctly sized
 - A service for that deployment
 - A network policy only allowing pods in other namespaces with the label `egress.monzo.com/allowed-gateway: yourservice`
 
@@ -37,7 +38,9 @@ spec:
     # optional, defaults to TCP
     protocol: TCP
   # optional, defaults to 3
-  replicas: 5
+  minReplicas: 5
+  # optional, defaults to 12
+  maxReplicas: 10
 ```
 
 Example CoreDNS config:

@@ -34,18 +34,11 @@ func (r *ExternalServiceReconciler) reconcileDeployment(ctx context.Context, req
 	patched := d.DeepCopy()
 	patched.Labels = desired.Labels
 	patched.Annotations = desired.Annotations
-	patched.Annotations["deployment.kubernetes.io/revision"] = d.Annotations["deployment.kubernetes.io/revision"]
+	copyKey(d.Annotations, patched.Annotations, "deployment.kubernetes.io/revision")
 	patched.Spec = desired.Spec
+	patched.Spec.Replicas = d.Spec.Replicas
 
 	return ignoreNotFound(r.patchIfNecessary(ctx, patched, client.MergeFrom(d)))
-}
-
-func replicas(es *egressv1.ExternalService) int32 {
-	if es.Spec.Replicas > 0 {
-		return es.Spec.Replicas
-	}
-
-	return 3
 }
 
 func deploymentPorts(es *egressv1.ExternalService) (ports []corev1.ContainerPort) {
@@ -67,7 +60,6 @@ func deploymentPorts(es *egressv1.ExternalService) (ports []corev1.ContainerPort
 }
 
 func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deployment {
-	r := replicas(es)
 	adPort := adminPort(es)
 	a := annotations(es)
 	a["egress.monzo.com/config-hash"] = configHash
@@ -82,7 +74,6 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 		},
 		Spec: appsv1.DeploymentSpec{
 			ProgressDeadlineSeconds: proto.Int(600),
-			Replicas:                &r,
 			RevisionHistoryLimit:    proto.Int(10),
 			Strategy: appsv1.DeploymentStrategy{
 				Type: appsv1.RollingUpdateDeploymentStrategyType,

@@ -42,6 +42,16 @@ spec:
                 to produced Service objects CoreDNS can watch this label and decide
                 to rewrite DnsName -> clusterIP'
               type: boolean
+            maxReplicas:
+              description: MaxReplicas is the maximum number of gateways to run, enforced
+                by HorizontalPodAutoscaler. Defaults to 12
+              format: int32
+              type: integer
+            minReplicas:
+              description: MinReplicas is the minimum number of gateways to run. Defaults
+                to 3
+              format: int32
+              type: integer
             ports:
               description: Ports is a list of ports on which the external service
                 may be called
@@ -57,11 +67,6 @@ spec:
                     type: string
                 type: object
               type: array
-            replicas:
-              description: Replicas is the number of gateways to run. Defaults to
-                3
-              format: int32
-              type: integer
           type: object
         status:
           description: ExternalServiceStatus defines the observed state of ExternalService

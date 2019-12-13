@@ -18,6 +18,7 @@ package controllers
 import (
 	"bytes"
 	"context"
+
 	"github.com/go-logr/logr"
 	egressv1 "github.com/monzo/egress-operator/api/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -67,6 +68,11 @@ func (r *ExternalServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 
 	if err := r.reconcileDeployment(ctx, req, es, configHash); err != nil {
 		log.Error(err, "unable to reconcile Deployment")
+		return ctrl.Result{}, err
+	}
+
+	if err := r.reconcileAutoscaler(ctx, req, es); err != nil {
+		log.Error(err, "unable to reconcile HorizontalPodAutoscaler")
 		return ctrl.Result{}, err
 	}
 
@@ -131,5 +137,13 @@ func (r *ExternalServiceReconciler) patchIfNecessary(ctx context.Context, obj ru
 		return nil
 	}
 
+	r.Log.WithValues("patch", string(data), "kind", obj.GetObjectKind().GroupVersionKind().String()).Info("Patching object")
+
 	return r.Client.Patch(ctx, obj, patch, opts...)
+}
+
+func copyKey(from, to map[string]string, key string) {
+	if v, ok := from[key]; ok {
+		to[key] = v
+	}
 }
