@@ -34,6 +34,8 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
+const namespace = "egress-operator-system"
+
 func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
 
@@ -58,6 +60,7 @@ func main() {
 		MetricsBindAddress: metricsAddr,
 		LeaderElection:     enableLeaderElection,
 		Port:               9443,
+		Namespace:          namespace,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")

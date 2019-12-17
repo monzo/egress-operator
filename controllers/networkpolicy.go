@@ -14,7 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;patch
+// +kubebuilder:rbac:namespace=egress-operator-system,groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;patch
 
 func (r *ExternalServiceReconciler) reconcileNetworkPolicy(ctx context.Context, req ctrl.Request, es *egressv1.ExternalService) error {
 	desired := networkPolicy(es)

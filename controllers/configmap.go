@@ -26,7 +26,7 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;patch
+// +kubebuilder:rbac:namespace=egress-operator-system,groups=core,resources=configmaps,verbs=get;list;watch;create;patch
 
 func (r *ExternalServiceReconciler) reconcileConfigMap(ctx context.Context, req ctrl.Request, es *egressv1.ExternalService, desired *corev1.ConfigMap) error {
 	if err := ctrl.SetControllerReference(es, desired, r.Scheme); err != nil {

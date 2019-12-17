@@ -15,7 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;patch
+// +kubebuilder:rbac:namespace=egress-operator-system,groups=core,resources=services,verbs=get;list;watch;create;patch
 
 func (r *ExternalServiceReconciler) reconcileService(ctx context.Context, req ctrl.Request, es *egressv1.ExternalService) error {
 	desired := service(es)
