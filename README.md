@@ -10,7 +10,7 @@ Built with kubebuilder: https://book.kubebuilder.io/
 
 The operator accepts ExternalService objects, which aren't namespaced, which define a dns name and ports for an external service.
 In the `egress-operator-system` namespace, it creates:
-- An envoy configmap for a TCP/UDP proxy to that service
+- An envoy configmap for a TCP/UDP proxy to that service (UDP not working until the next envoy release that enables it)
 - A deployment for some envoy pods with that config
 - A horizontal pod autoscaler to keep the deployment correctly sized
 - A service for that deployment
