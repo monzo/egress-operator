@@ -22,6 +22,7 @@ import (
 	"github.com/go-logr/logr"
 	egressv1 "github.com/monzo/egress-operator/api/v1"
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
@@ -115,6 +116,7 @@ func (r *ExternalServiceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.Service{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.ConfigMap{}).
+		Owns(&autoscalingv1.HorizontalPodAutoscaler{}).
 		Complete(r)
 }
 
