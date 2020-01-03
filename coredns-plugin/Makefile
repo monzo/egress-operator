@@ -1,4 +1,4 @@
-IMG ?= ${ACC}.dkr.ecr.eu-west-1.amazonaws.com/monzo/egress-operator:coredns-plugin-$(shell git rev-parse --short head)
+IMG ?= ${ACC}.dkr.ecr.eu-west-1.amazonaws.com/monzo/egress-operator:coredns-with-plugin-$(shell git rev-parse --short head)
 
 docker-build: build
 	docker build . -t ${IMG}
