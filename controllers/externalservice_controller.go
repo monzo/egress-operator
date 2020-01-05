@@ -144,8 +144,8 @@ func (r *ExternalServiceReconciler) patchIfNecessary(ctx context.Context, obj ru
 	return r.Client.Patch(ctx, obj, patch, opts...)
 }
 
-func copyKey(from, to map[string]string, key string) {
-	if v, ok := from[key]; ok {
-		to[key] = v
+func mergeMap(from, to map[string]string) {
+	for k, v := range from {
+		to[k] = v
 	}
 }

@@ -30,8 +30,8 @@ func (r *ExternalServiceReconciler) reconcileNetworkPolicy(ctx context.Context, 
 	}
 
 	patched := np.DeepCopy()
-	patched.Labels = desired.Labels
-	patched.Annotations = desired.Annotations
+	mergeMap(desired.Labels, patched.Labels)
+	mergeMap(desired.Annotations, patched.Annotations)
 	patched.Spec = desired.Spec
 
 	return ignoreNotFound(r.patchIfNecessary(ctx, patched, client.MergeFrom(np)))
