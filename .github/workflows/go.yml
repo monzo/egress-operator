@@ -23,9 +23,14 @@ jobs:
             curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
             dep ensure
         fi
+        curl -sL https://go.kubebuilder.io/dl/2.2.0/linux/amd64 | tar -xz -C /tmp/
+        sudo mv /tmp/kubebuilder_2.2.0_linux_amd64 /usr/local/kubebuilder
 
     - name: Build
       run: go build -v .
+
+    - name: Build CoreDNS plugin
+      run: cd coredns-plugin && go build -v ./cmd
 
     - name: Test
       run: go test ./... -ginkgo.v -v
