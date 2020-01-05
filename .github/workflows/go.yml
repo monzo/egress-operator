@@ -25,12 +25,14 @@ jobs:
         fi
         curl -sL https://go.kubebuilder.io/dl/2.2.0/linux/amd64 | tar -xz -C /tmp/
         sudo mv /tmp/kubebuilder_2.2.0_linux_amd64 /usr/local/kubebuilder
+        
+        cd coredns-plugin && go get -v -t -d ./...
 
     - name: Build
       run: go build -v .
 
     - name: Build CoreDNS plugin
-      run: cd coredns-plugin && go build -v ./cmd
+      run: cd coredns-plugin && go build -o coredns ./cmd
 
     - name: Test
       run: go test ./... -ginkgo.v -v
