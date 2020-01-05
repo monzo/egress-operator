@@ -28,10 +28,8 @@ func (r *ExternalServiceReconciler) reconcileAutoscaler(ctx context.Context, req
 	}
 
 	patched := d.DeepCopy()
-	patched.Labels = desired.Labels
-	patched.Annotations = desired.Annotations
-	copyKey(d.Annotations, patched.Annotations, "autoscaling.alpha.kubernetes.io/conditions")
-	copyKey(d.Annotations, patched.Annotations, "autoscaling.alpha.kubernetes.io/current-metrics")
+	mergeMap(desired.Labels, patched.Labels)
+	mergeMap(desired.Annotations, patched.Annotations)
 	patched.Spec = desired.Spec
 
 	return ignoreNotFound(r.patchIfNecessary(ctx, patched, client.MergeFrom(d)))
