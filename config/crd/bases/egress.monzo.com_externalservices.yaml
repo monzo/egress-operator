@@ -67,6 +67,30 @@ spec:
                     type: string
                 type: object
               type: array
+            resources:
+              description: ResourceRequirements describes the compute resource requirements
+                for gateway pods. Defaults to 100m, 50Mi, 2, 1Gi
+              properties:
+                limits:
+                  additionalProperties:
+                    type: string
+                  description: 'Limits describes the maximum amount of compute resources
+                    allowed. More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/'
+                  type: object
+                requests:
+                  additionalProperties:
+                    type: string
+                  description: 'Requests describes the minimum amount of compute resources
+                    required. If Requests is omitted for a container, it defaults
+                    to Limits if that is explicitly specified, otherwise to an implementation-defined
+                    value. More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/'
+                  type: object
+              type: object
+            targetCPUUtilizationPercentage:
+              description: Target average CPU utilization (represented as a percentage
+                of requested CPU) over all the pods. Defaults to 50
+              format: int32
+              type: integer
           type: object
         status:
           description: ExternalServiceStatus defines the observed state of ExternalService

@@ -64,6 +64,22 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 	a["egress.monzo.com/config-hash"] = configHash
 	a["egress.monzo.com/admin-port"] = strconv.Itoa(int(adPort))
 
+	var resources corev1.ResourceRequirements
+	if es.Spec.Resources != nil {
+		resources = *es.Spec.Resources
+	} else {
+		resources = corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				"cpu":    resource.MustParse("100m"),
+				"memory": resource.MustParse("50Mi"),
+			},
+			Limits: corev1.ResourceList{
+				"cpu":    resource.MustParse("2"),
+				"memory": resource.MustParse("1Gi"),
+			},
+		}
+	}
+
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        es.Name,
@@ -125,16 +141,7 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 								SuccessThreshold: 1,
 								TimeoutSeconds:   1,
 							},
-							Resources: corev1.ResourceRequirements{
-								Requests: corev1.ResourceList{
-									"cpu":    resource.MustParse("100m"),
-									"memory": resource.MustParse("50Mi"),
-								},
-								Limits: corev1.ResourceList{
-									"cpu":    resource.MustParse("2"),
-									"memory": resource.MustParse("1Gi"),
-								},
-							},
+							Resources: resources,
 						},
 					},
 					RestartPolicy:                 corev1.RestartPolicyAlways,

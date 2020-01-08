@@ -46,6 +46,11 @@ func autoscaler(es *egressv1.ExternalService) *autoscalingv1.HorizontalPodAutosc
 		max = proto.Int(12)
 	}
 
+	target := es.Spec.TargetCPUUtilizationPercentage
+	if target == nil {
+		target = proto.Int(50)
+	}
+
 	return &autoscalingv1.HorizontalPodAutoscaler{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        es.Name,
@@ -61,7 +66,7 @@ func autoscaler(es *egressv1.ExternalService) *autoscalingv1.HorizontalPodAutosc
 			},
 			MinReplicas:                    min,
 			MaxReplicas:                    *max,
-			TargetCPUUtilizationPercentage: proto.Int(70),
+			TargetCPUUtilizationPercentage: target,
 		},
 	}
 }
