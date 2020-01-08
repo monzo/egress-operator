@@ -41,6 +41,16 @@ spec:
   minReplicas: 5
   # optional, defaults to 12
   maxReplicas: 10
+  # optional, defaults to 50
+  targetCPUUtilizationPercentage: 30
+  # optional, if not provided then defaults to 100m, 50Mi, 2, 1Gi
+  resources:
+    requests:
+      cpu: 1
+      memory: 100Mi
+    limits:
+      cpu: 2
+      memory: 200Mi
 ```
 
 Example CoreDNS config:
