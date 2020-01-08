@@ -42,6 +42,14 @@ type ExternalServiceSpec struct {
 	// +optional
 	MaxReplicas *int32 `json:"maxReplicas,omitempty"`
 
+	// Target average CPU utilization (represented as a percentage of requested CPU) over all the pods. Defaults to 50
+	// +optional
+	TargetCPUUtilizationPercentage *int32 `json:"targetCPUUtilizationPercentage,omitempty"`
+
+	// ResourceRequirements describes the compute resource requirements for gateway pods. Defaults to 100m, 50Mi, 2, 1Gi
+	// +optional
+	Resources *v1.ResourceRequirements `json:"resources,omitempty"`
+
 	// If true, add a `egress.monzo.com/hijack-dns: true` label to produced Service objects
 	// CoreDNS can watch this label and decide to rewrite DnsName -> clusterIP
 	HijackDns bool `json:"hijackDns,omitempty"`
