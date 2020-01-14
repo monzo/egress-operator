@@ -63,6 +63,8 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 	a := annotations(es)
 	a["egress.monzo.com/config-hash"] = configHash
 	a["egress.monzo.com/admin-port"] = strconv.Itoa(int(adPort))
+	a["prometheus.io/port"] = "11000"
+	a["prometheus.io/scrape"] = "true"
 
 	var resources corev1.ResourceRequirements
 	if es.Spec.Resources != nil {
