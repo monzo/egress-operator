@@ -79,6 +79,9 @@ func adminPort(es *egressv1.ExternalService) int32 {
 	panic("couldn't find a port for admin listener")
 }
 
+const accessLogFormat = `[%START_TIME%] %BYTES_RECEIVED% %BYTES_SENT% %DURATION% "%DOWNSTREAM_REMOTE_ADDRESS%" "%UPSTREAM_HOST%"
+`
+
 func envoyConfig(es *egressv1.ExternalService) (string, error) {
 	config := bootstrapv2.Bootstrap{
 		Node: &envoycorev2.Node{
@@ -131,6 +134,9 @@ func envoyConfig(es *egressv1.ExternalService) (string, error) {
 		switch protocol {
 		case envoycorev2.SocketAddress_TCP:
 			accessConfig, err := ptypes.MarshalAny(&accesslogv2.FileAccessLog{
+				AccessLogFormat: &accesslogv2.FileAccessLog_Format{
+					Format: accessLogFormat,
+				},
 				Path: "/dev/stdout",
 			})
 
