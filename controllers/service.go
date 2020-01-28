@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	egressv1 "github.com/monzo/egress-operator/api/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -18,15 +19,28 @@ import (
 // +kubebuilder:rbac:namespace=egress-operator-system,groups=core,resources=services,verbs=get;list;watch;create;patch
 
 func (r *ExternalServiceReconciler) reconcileService(ctx context.Context, req ctrl.Request, es *egressv1.ExternalService) error {
-	desired := service(es)
-	if err := ctrl.SetControllerReference(es, desired, r.Scheme); err != nil {
+	d := &appsv1.Deployment{}
+	if err := r.Get(ctx, req.NamespacedName, d); err != nil && !apierrs.IsNotFound(err) {
 		return err
 	}
+
+	podsReady := d.Status.ReadyReplicas > 0
+
 	s := &corev1.Service{}
 	if err := r.Get(ctx, req.NamespacedName, s); err != nil {
 		if apierrs.IsNotFound(err) {
+			desired := service(es, podsReady, nil)
+			if err := ctrl.SetControllerReference(es, desired, r.Scheme); err != nil {
+				return err
+			}
+
 			return r.Client.Create(ctx, desired)
 		}
+		return err
+	}
+
+	desired := service(es, podsReady, s)
+	if err := ctrl.SetControllerReference(es, desired, r.Scheme); err != nil {
 		return err
 	}
 
@@ -59,10 +73,33 @@ func servicePorts(es *egressv1.ExternalService) (ports []corev1.ServicePort) {
 	return
 }
 
-func service(es *egressv1.ExternalService) *corev1.Service {
+func service(es *egressv1.ExternalService, ready bool, current *corev1.Service) *corev1.Service {
 	l := labels(es)
-	if es.Spec.HijackDns {
+	switch {
+	// Easy case; if hijacking is disabled, don't hijack
+	case !es.Spec.HijackDns:
+		l["egress.monzo.com/hijack-dns"] = "false"
+
+	// Easy case: pods are ready
+	case ready:
 		l["egress.monzo.com/hijack-dns"] = "true"
+
+	// Creation, not ready - go to waiting state. We'll get another reconcile event when
+	// the ready count changes
+	case current == nil:
+		l["egress.monzo.com/hijack-dns"] = "waiting-for-pods"
+
+	// Enablement, not ready - go to waiting state
+	case current.Labels["egress.monzo.com/hijack-dns"] == "false":
+		l["egress.monzo.com/hijack-dns"] = "waiting-for-pods"
+
+	// Once we've started hijacking, do not stop, even if we're not ready now
+	case current.Labels["egress.monzo.com/hijack-dns"] == "true":
+		l["egress.monzo.com/hijack-dns"] = "true"
+
+	// Waiting and we're still not ready
+	case current.Labels["egress.monzo.com/hijack-dns"] == "waiting-for-pods":
+		l["egress.monzo.com/hijack-dns"] = "waiting-for-pods"
 	}
 
 	return &corev1.Service{

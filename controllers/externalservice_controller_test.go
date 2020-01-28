@@ -168,9 +168,9 @@ func assertState(key types.NamespacedName, es *v1.ExternalService) {
 
 		return s
 	}, timeout, interval).Should(And(
-		WithTransform(func(d *corev1.Service) corev1.ServiceSpec { return d.Spec }, Equal(service(es).Spec)),
+		WithTransform(func(d *corev1.Service) corev1.ServiceSpec { return d.Spec }, Equal(service(es, true, nil).Spec)),
 		assertOwner(key.Name),
-		assertLabels(service(es)),
+		assertLabels(service(es, true, nil)),
 	))
 
 	Eventually(func() *corev1.ConfigMap {
