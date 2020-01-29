@@ -76,6 +76,8 @@ staticResources:
           - name: envoy.file_access_log
             typedConfig:
               '@type': type.googleapis.com/envoy.config.accesslog.v2.FileAccessLog
+              format: |
+                [%START_TIME%] %BYTES_RECEIVED% %BYTES_SENT% %DURATION% "%DOWNSTREAM_REMOTE_ADDRESS%" "%UPSTREAM_HOST%"
               path: /dev/stdout
           cluster: foo_TCP_101
           statPrefix: tcp_proxy
