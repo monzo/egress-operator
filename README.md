@@ -16,13 +16,23 @@ In the `egress-operator-system` namespace, it creates:
 - A service for that deployment
 - A network policy only allowing pods in other namespaces with the label `egress.monzo.com/allowed-gateway: yourservice`
 
-Some useful tips:
+## Installing
 
-- `make install` - set up CRD in cluster
 - `make run` - run locally against a remote cluster (create an ExternalService object to see stuff happen)
-- `cd coredns-plugin && make docker-build` - produce a coredns image that contains the plugin
+- `make docker-build docker-push install IMG=yourrepo/egress-operator:latest` - set up controller in cluster
+- `cd coredns-plugin && make docker-build docker-push IMG=yourrepo/egress-operator-coredns:latest` - produce a coredns image that contains the plugin
 
-An example object:
+You'll need to swap our the image of your coredns kubedns Deployment for `yourrepo/egress-operator-coredns:latest`,
+and to edit the coredns Corefile configmap to put in `egressoperator egress-operator-system cluster.local` (see below).
+
+Once the controller and dns server are running, create ExternalService objects which denote what dns name you want
+to capture traffic for. Dns queries for this name will be rewritten to point to gateway pods.
+
+By default, your client pods need a label `egress.monzo.com/allowed-gateway: nameofgateway` to be able to reach
+the destination, but you can always write an additional NetworkPolicy selecting gateway pods and allowing all traffic,
+for testing purposes.
+
+An example ExternalService:
 
 ```yaml
 apiVersion: egress.monzo.com/v1
