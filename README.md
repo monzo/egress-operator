@@ -72,3 +72,32 @@ Example CoreDNS config:
     forward . /etc/resolv.conf
 }
 ```
+
+### Blocking non-gateway traffic
+
+This operator won't block any traffic for you, it simply sets up some permitted routes for traffic through the egress
+gateways. You'll need a default-deny policy to block traffic that doesn't go through gateways. To do that, you probably
+need a policy like this in every namespace that you want to control:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-external-egress
+  namespace: your-application-namespace
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - ipBlock:
+        # ensure your internal IP range is allowed here
+        # traffic to external IPs will not be allowed from this namespace.
+        # therefore, pods will have to use egress gateways
+        cidr: 10.0.0.0/8 
+```
+
+If you already have a default deny egress policy, the above won't be needed. You'll instead want to explicitly allow 
+egress from your pods to all gateway pods. The ingress policies on gateway pods will ensure that only correct traffic is
+allowed.
