@@ -208,7 +208,7 @@ func envoyConfig(es *egressv1.ExternalService) (string, error) {
 			},
 		},
 		{
-			TagName: "is_egress_gateway",
+			TagName: "egress_operator_managed",
 			TagValue: &metricsv2.TagSpecifier_FixedValue{
 				FixedValue: "true",
 			},
