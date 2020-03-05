@@ -14,6 +14,7 @@ import (
 	accesslogfilterv2 "github.com/envoyproxy/go-control-plane/envoy/config/filter/accesslog/v2"
 	tcpproxyv2 "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/tcp_proxy/v2"
 	udpproxyv2 "github.com/envoyproxy/go-control-plane/envoy/config/filter/udp/udp_proxy/v2alpha"
+	metricsv2 "github.com/envoyproxy/go-control-plane/envoy/config/metrics/v2"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/duration"
@@ -197,6 +198,21 @@ func envoyConfig(es *egressv1.ExternalService) (string, error) {
 
 		config.StaticResources.Clusters = append(config.StaticResources.Clusters, cluster)
 		config.StaticResources.Listeners = append(config.StaticResources.Listeners, listener)
+	}
+
+	config.StatsConfig.StatsTags = []*metricsv2.TagSpecifier{
+		{
+			TagName: "cluster_name",
+			TagValue: &metricsv2.TagSpecifier_FixedValue{
+				FixedValue: es.Name,
+			},
+		},
+		{
+			TagName: "is_egress_gateway",
+			TagValue: &metricsv2.TagSpecifier_FixedValue{
+				FixedValue: "true",
+			},
+		},
 	}
 
 	m := &jsonpb.Marshaler{}
