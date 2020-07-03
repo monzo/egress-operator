@@ -142,6 +142,15 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 								TimeoutSeconds:   1,
 							},
 							Resources: resources,
+							SecurityContext: &corev1.SecurityContext{
+								AllowPrivilegeEscalation: proto.Bool(false),
+								RunAsUser:                proto.Int64(0),
+								Capabilities: &corev1.Capabilities{
+									Add: []corev1.Capability{
+										"NET_BIND_SERVICE",
+									},
+								},
+							},
 						},
 					},
 					RestartPolicy:                 corev1.RestartPolicyAlways,
@@ -162,6 +171,7 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 							},
 						},
 					},
+					ServiceAccountName: "egress-gateway",
 				},
 			},
 		},
