@@ -66,7 +66,7 @@ Example CoreDNS config:
 ### Set up the controller manager and its `CustomResourceDefinition` in the cluster
 
 ```
-make controller-gen
+make docker-build docker-push install IMG=yourrepo/egress-operator:v0.1
 make deploy IMG=yourrepo/egress-operator:v0.1
 ```
 
