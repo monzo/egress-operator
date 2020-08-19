@@ -16,14 +16,61 @@ In the `egress-operator-system` namespace, it creates:
 - A service for that deployment
 - A network policy only allowing pods in other namespaces with the label `egress.monzo.com/allowed-gateway: yourservice`
 
+## Pre-requisites
+
+1. You need to have a private container repository for hosting the egress-operator image, such as an AWS Elastic Container Repository (ECR) or a GCP Container Registry (GCR), which needs to be accessible from your cluster. This will be referred to as `yourrepo` in the instructions below.
+2. Your local system must have a recent version of `golang` for building the code, which you can install by following instructions [here](https://golang.org/doc/install).
+3. Your local system must have Kubebuilder for code generation, which you can install by following instructions [here](https://book.kubebuilder.io/quick-start.html).
+4. Your local system must have Kustomize for building the Kubernetes manifests, which you can install by following instructions [here](https://kubernetes-sigs.github.io/kustomize/installation/).
+5. Your cluster must be running CoreDNS instead of kube-dns, which may not be the case if you are using a managed Kubernetes service. [This article](https://medium.com/google-cloud/using-coredns-on-gke-3973598ab561) provides some help for GCP Kubernetes Engine, and guidance for AWS Elastic Kubernetes Service can be found [here](https://docs.aws.amazon.com/eks/latest/userguide/coredns.html). 
+
 ## Installing
 
-- `make run` - run locally against a remote cluster (create an ExternalService object to see stuff happen)
-- `make docker-build docker-push install IMG=yourrepo/egress-operator:latest` - set up controller in cluster
-- `cd coredns-plugin && make docker-build docker-push IMG=yourrepo/egress-operator-coredns:latest` - produce a coredns image that contains the plugin
+### Testing locally against a remote cluster
 
-You'll need to swap our the image of your coredns kubedns Deployment for `yourrepo/egress-operator-coredns:latest`,
-and to edit the coredns Corefile configmap to put in `egressoperator egress-operator-system cluster.local` (see below).
+```bash
+make run
+``` 
+This creates an ExternalService object to see the controller-manager creating managed resources in the remote cluster.
+
+### Setting up CoreDNS plugin
+
+The CoreDNS plugin rewrites responses for external service hostnames managed by egress-operator.
+
+Build a CoreDNS image which contains the plugin:
+```bash
+cd coredns-plugin
+make docker-build docker-push IMG=yourrepo/egress-operator-coredns:latest
+```
+
+You'll need to swap out the image of your coredns kubedns Deployment for `yourrepo/egress-operator-coredns:latest`:
+```bash
+kubectl edit deploy coredns -n kube-system   # Your Deployment name may vary
+```
+
+And edit the coredns Corefile in ConfigMap to put in `egressoperator egress-operator-system cluster.local`:
+```bash
+kubectl edit configmap coredns-config -n kube-system   # Your ConfigMap name may vary
+```
+
+Example CoreDNS config:
+
+```Caddy
+.:53 {
+    egressoperator egress-operator-system cluster.local
+    kubernetes cluster.local
+    forward . /etc/resolv.conf
+}
+```
+
+### Set up the controller manager and its `CustomResourceDefinition` in the cluster
+
+```
+make controller-gen
+make deploy IMG=yourrepo/egress-operator:v0.1
+```
+
+## Usage
 
 Once the controller and dns server are running, create ExternalService objects which denote what dns name you want
 to capture traffic for. Dns queries for this name will be rewritten to point to gateway pods.
@@ -61,16 +108,6 @@ spec:
     limits:
       cpu: 2
       memory: 200Mi
-```
-
-Example CoreDNS config:
-
-```Caddy
-.:53 {
-    egressoperator egress-operator-system cluster.local
-    kubernetes cluster.local
-    forward . /etc/resolv.conf
-}
 ```
 
 ### Blocking non-gateway traffic
