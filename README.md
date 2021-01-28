@@ -14,7 +14,7 @@ In the `egress-operator-system` namespace, it creates:
 - A deployment for some envoy pods with that config
 - A horizontal pod autoscaler to keep the deployment correctly sized
 - A service for that deployment
-- A network policy only allowing pods in other namespaces with the label `egress.monzo.com/allowed-gateway: yourservice`
+- A network policy only allowing pods in other namespaces with the label `egress.monzo.com/allowed-<yourservice>: true`
 
 ## Pre-requisites
 
