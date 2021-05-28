@@ -18,6 +18,7 @@ package main
 import (
 	"flag"
 	"os"
+	"time"
 
 	egressv1 "github.com/monzo/egress-operator/api/v1"
 	"github.com/monzo/egress-operator/controllers"
@@ -32,6 +33,10 @@ import (
 var (
 	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
+
+	// see https://github.com/operator-framework/operator-sdk/issues/1813
+	leaseDuration = 30 * time.Second
+	renewDeadline = 20 * time.Second
 )
 
 const namespace = "egress-operator-system"
@@ -59,6 +64,8 @@ func main() {
 		Scheme:             scheme,
 		MetricsBindAddress: metricsAddr,
 		LeaderElection:     enableLeaderElection,
+		LeaseDuration:      &leaseDuration,
+		RenewDeadline:      &renewDeadline,
 		Port:               9443,
 		Namespace:          namespace,
 	})
