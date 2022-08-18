@@ -17,13 +17,14 @@ import (
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/duration"
-	egressv1 "github.com/monzo/egress-operator/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
+
+	egressv1 "github.com/monzo/egress-operator/api/v1"
 )
 
 // +kubebuilder:rbac:namespace=egress-operator-system,groups=core,resources=configmaps,verbs=get;list;watch;create;patch
@@ -128,6 +129,25 @@ func envoyConfig(es *egressv1.ExternalService) (string, error) {
 					},
 				},
 			},
+		}
+
+		// If we want to override the normal DNS lookup and set the IP address
+		// overwrite the Hosts field with one for each IP
+		if len(es.Spec.IpOverride) > 0 {
+			cluster.Hosts = []*envoycorev2.Address{}
+			for _, ip := range es.Spec.IpOverride {
+				cluster.Hosts = append(cluster.Hosts, &envoycorev2.Address{
+					Address: &envoycorev2.Address_SocketAddress{
+						SocketAddress: &envoycorev2.SocketAddress{
+							Address:  ip,
+							Protocol: protocol,
+							PortSpecifier: &envoycorev2.SocketAddress_PortValue{
+								PortValue: uint32(port.Port),
+							},
+						},
+					},
+				})
+			}
 		}
 
 		var listener *envoyv2.Listener
