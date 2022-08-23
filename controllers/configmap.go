@@ -148,6 +148,9 @@ func envoyConfig(es *egressv1.ExternalService) (string, error) {
 					},
 				})
 			}
+			cluster.ClusterDiscoveryType = &envoyv2.Cluster_Type{
+				Type: envoyv2.Cluster_STATIC,
+			}
 		}
 
 		var listener *envoyv2.Listener
