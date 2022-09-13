@@ -6,7 +6,6 @@ import (
 	"hash/fnv"
 	"strconv"
 
-	envoycorev2 "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	accesslogfilterv3 "github.com/envoyproxy/go-control-plane/envoy/config/accesslog/v3"
 	bootstrap "github.com/envoyproxy/go-control-plane/envoy/config/bootstrap/v3"
 	envoyv3 "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
@@ -109,7 +108,7 @@ func envoyConfig(es *egressv1.ExternalService) (string, error) {
 
 	for _, port := range es.Spec.Ports {
 		protocol := protocolToEnvoy(port.Protocol)
-		name := fmt.Sprintf("%s_%s_%s", es.Name, envoycorev2.SocketAddress_Protocol_name[int32(protocol)], strconv.Itoa(int(port.Port)))
+		name := fmt.Sprintf("%s_%s_%s", es.Name, envoycorev3.SocketAddress_Protocol_name[int32(protocol)], strconv.Itoa(int(port.Port)))
 		cluster := &envoyv3.Cluster{
 			Name: name,
 			ClusterDiscoveryType: &envoyv3.Cluster_Type{
