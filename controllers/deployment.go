@@ -108,7 +108,6 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 					Containers: []corev1.Container{
 						{
 							Name: "gateway",
-							// TODO this version doesn't actually support UDP, we need 1.13 which isn't stable
 							Image:           "envoyproxy/envoy-alpine:v1.16.5",
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							Ports:           deploymentPorts(es),
@@ -145,6 +144,7 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 							Resources: resources,
 							Env: []corev1.EnvVar{
 								{
+									// Envoy 1.16 defaults
 									Name:  "ENVOY_UID",
 									Value: "0",
 								},
