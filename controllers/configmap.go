@@ -6,24 +6,28 @@ import (
 	"hash/fnv"
 	"strconv"
 
-	envoyv2 "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	envoycorev2 "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	envoylistener "github.com/envoyproxy/go-control-plane/envoy/api/v2/listener"
-	accesslogv2 "github.com/envoyproxy/go-control-plane/envoy/config/accesslog/v2"
-	bootstrapv2 "github.com/envoyproxy/go-control-plane/envoy/config/bootstrap/v2"
-	accesslogfilterv2 "github.com/envoyproxy/go-control-plane/envoy/config/filter/accesslog/v2"
-	tcpproxyv2 "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/tcp_proxy/v2"
-	udpproxyv2 "github.com/envoyproxy/go-control-plane/envoy/config/filter/udp/udp_proxy/v2alpha"
+	accesslogfilterv3 "github.com/envoyproxy/go-control-plane/envoy/config/accesslog/v3"
+	bootstrap "github.com/envoyproxy/go-control-plane/envoy/config/bootstrap/v3"
+	envoyv3 "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
+	envoycorev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	envoyendpoint "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
+	envoylistener "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	filev3 "github.com/envoyproxy/go-control-plane/envoy/extensions/access_loggers/file/v3"
+	tcpproxyv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/tcp_proxy/v3"
+
+	udpproxyv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/udp/udp_proxy/v3"
+
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/duration"
-	egressv1 "github.com/monzo/egress-operator/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
+
+	egressv1 "github.com/monzo/egress-operator/api/v1"
 )
 
 // +kubebuilder:rbac:namespace=egress-operator-system,groups=core,resources=configmaps,verbs=get;list;watch;create;patch
@@ -48,16 +52,16 @@ func (r *ExternalServiceReconciler) reconcileConfigMap(ctx context.Context, req 
 	return ignoreNotFound(r.patchIfNecessary(ctx, patched, client.MergeFrom(c)))
 }
 
-func protocolToEnvoy(p *corev1.Protocol) envoycorev2.SocketAddress_Protocol {
+func protocolToEnvoy(p *corev1.Protocol) envoycorev3.SocketAddress_Protocol {
 	if p == nil {
-		return envoycorev2.SocketAddress_TCP
+		return envoycorev3.SocketAddress_TCP
 	}
 
 	switch *p {
 	case corev1.ProtocolUDP:
-		return envoycorev2.SocketAddress_UDP
+		return envoycorev3.SocketAddress_UDP
 	default:
-		return envoycorev2.SocketAddress_TCP
+		return envoycorev3.SocketAddress_TCP
 	}
 }
 
@@ -83,46 +87,59 @@ const accessLogFormat = `[%START_TIME%] %BYTES_RECEIVED% %BYTES_SENT% %DURATION%
 `
 
 func envoyConfig(es *egressv1.ExternalService) (string, error) {
-	config := bootstrapv2.Bootstrap{
-		Node: &envoycorev2.Node{
+	config := bootstrap.Bootstrap{
+		Node: &envoycorev3.Node{
 			Cluster: es.Name,
 		},
-		Admin: &bootstrapv2.Admin{
-			Address: &envoycorev2.Address{Address: &envoycorev2.Address_SocketAddress{
-				SocketAddress: &envoycorev2.SocketAddress{
+		Admin: &bootstrap.Admin{
+			Address: &envoycorev3.Address{Address: &envoycorev3.Address_SocketAddress{
+				SocketAddress: &envoycorev3.SocketAddress{
 					Address:  "0.0.0.0",
-					Protocol: envoycorev2.SocketAddress_TCP,
-					PortSpecifier: &envoycorev2.SocketAddress_PortValue{
+					Protocol: envoycorev3.SocketAddress_TCP,
+					PortSpecifier: &envoycorev3.SocketAddress_PortValue{
 						PortValue: uint32(adminPort(es)),
 					},
 				},
 			}},
 			AccessLogPath: "/dev/stdout",
 		},
-		StaticResources: &bootstrapv2.Bootstrap_StaticResources{},
+		StaticResources: &bootstrap.Bootstrap_StaticResources{},
 	}
 
 	for _, port := range es.Spec.Ports {
 		protocol := protocolToEnvoy(port.Protocol)
-		name := fmt.Sprintf("%s_%s_%s", es.Name, envoycorev2.SocketAddress_Protocol_name[int32(protocol)], strconv.Itoa(int(port.Port)))
-		cluster := &envoyv2.Cluster{
+		name := fmt.Sprintf("%s_%s_%s", es.Name, envoycorev3.SocketAddress_Protocol_name[int32(protocol)], strconv.Itoa(int(port.Port)))
+		cluster := &envoyv3.Cluster{
 			Name: name,
-			ClusterDiscoveryType: &envoyv2.Cluster_Type{
-				Type: envoyv2.Cluster_LOGICAL_DNS,
+			ClusterDiscoveryType: &envoyv3.Cluster_Type{
+				Type: envoyv3.Cluster_LOGICAL_DNS,
 			},
 			ConnectTimeout: &duration.Duration{
 				Seconds: 1,
 			},
-			LbPolicy:        envoyv2.Cluster_ROUND_ROBIN,
-			DnsLookupFamily: envoyv2.Cluster_V4_ONLY,
-			Hosts: []*envoycorev2.Address{
-				{
-					Address: &envoycorev2.Address_SocketAddress{
-						SocketAddress: &envoycorev2.SocketAddress{
-							Address:  es.Spec.DnsName,
-							Protocol: protocol,
-							PortSpecifier: &envoycorev2.SocketAddress_PortValue{
-								PortValue: uint32(port.Port),
+			LbPolicy:        envoyv3.Cluster_ROUND_ROBIN,
+			DnsLookupFamily: envoyv3.Cluster_V4_ONLY,
+			LoadAssignment: &envoyendpoint.ClusterLoadAssignment{
+				ClusterName: name,
+				Endpoints: []*envoyendpoint.LocalityLbEndpoints{
+					{
+						LbEndpoints: []*envoyendpoint.LbEndpoint{
+							{
+								HostIdentifier: &envoyendpoint.LbEndpoint_Endpoint{
+									Endpoint: &envoyendpoint.Endpoint{
+										Address: &envoycorev3.Address{
+											Address: &envoycorev3.Address_SocketAddress{
+												SocketAddress: &envoycorev3.SocketAddress{
+													Address:  es.Spec.DnsName,
+													Protocol: protocol,
+													PortSpecifier: &envoycorev3.SocketAddress_PortValue{
+														PortValue: uint32(port.Port),
+													},
+												},
+											},
+										},
+									},
+								},
 							},
 						},
 					},
@@ -130,23 +147,55 @@ func envoyConfig(es *egressv1.ExternalService) (string, error) {
 			},
 		}
 
-		var listener *envoyv2.Listener
+		// If we want to override the normal DNS lookup and set the IP address
+		// overwrite the Hosts field with one for each IP
+		if len(es.Spec.IpOverride) > 0 {
+			cluster.LoadAssignment.Endpoints = []*envoyendpoint.LocalityLbEndpoints{}
+			for _, ip := range es.Spec.IpOverride {
+				cluster.LoadAssignment.Endpoints = append(cluster.LoadAssignment.Endpoints, &envoyendpoint.LocalityLbEndpoints{
+					LbEndpoints: []*envoyendpoint.LbEndpoint{
+						{
+							HostIdentifier: &envoyendpoint.LbEndpoint_Endpoint{
+								Endpoint: &envoyendpoint.Endpoint{
+									Address: &envoycorev3.Address{
+										Address: &envoycorev3.Address_SocketAddress{
+											SocketAddress: &envoycorev3.SocketAddress{
+												Address:  ip,
+												Protocol: protocol,
+												PortSpecifier: &envoycorev3.SocketAddress_PortValue{
+													PortValue: uint32(port.Port),
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				})
+			}
+			cluster.ClusterDiscoveryType = &envoyv3.Cluster_Type{
+				Type: envoyv3.Cluster_STATIC,
+			}
+		}
+
+		var listener *envoylistener.Listener
 		switch protocol {
-		case envoycorev2.SocketAddress_TCP:
-			accessConfig, err := ptypes.MarshalAny(&accesslogv2.FileAccessLog{
-				AccessLogFormat: &accesslogv2.FileAccessLog_Format{
+		case envoycorev3.SocketAddress_TCP:
+			accessConfig, err := ptypes.MarshalAny(&filev3.FileAccessLog{
+				AccessLogFormat: &filev3.FileAccessLog_Format{
 					Format: accessLogFormat,
 				},
 				Path: "/dev/stdout",
 			})
 
-			filterConfig, err := ptypes.MarshalAny(&tcpproxyv2.TcpProxy{
-				AccessLog: []*accesslogfilterv2.AccessLog{{
+			filterConfig, err := ptypes.MarshalAny(&tcpproxyv3.TcpProxy{
+				AccessLog: []*accesslogfilterv3.AccessLog{{
 					Name:       "envoy.file_access_log",
-					ConfigType: &accesslogfilterv2.AccessLog_TypedConfig{TypedConfig: accessConfig},
+					ConfigType: &accesslogfilterv3.AccessLog_TypedConfig{TypedConfig: accessConfig},
 				}},
 				StatPrefix: "tcp_proxy",
-				ClusterSpecifier: &tcpproxyv2.TcpProxy_Cluster{
+				ClusterSpecifier: &tcpproxyv3.TcpProxy_Cluster{
 					Cluster: name,
 				},
 			})
@@ -154,14 +203,14 @@ func envoyConfig(es *egressv1.ExternalService) (string, error) {
 				return "", err
 			}
 
-			listener = &envoyv2.Listener{
+			listener = &envoylistener.Listener{
 				Name: name,
-				Address: &envoycorev2.Address{
-					Address: &envoycorev2.Address_SocketAddress{
-						SocketAddress: &envoycorev2.SocketAddress{
+				Address: &envoycorev3.Address{
+					Address: &envoycorev3.Address_SocketAddress{
+						SocketAddress: &envoycorev3.SocketAddress{
 							Protocol: protocol,
 							Address:  "0.0.0.0",
-							PortSpecifier: &envoycorev2.SocketAddress_PortValue{
+							PortSpecifier: &envoycorev3.SocketAddress_PortValue{
 								PortValue: uint32(port.Port),
 							}}}},
 				FilterChains: []*envoylistener.FilterChain{{
@@ -171,10 +220,10 @@ func envoyConfig(es *egressv1.ExternalService) (string, error) {
 							TypedConfig: filterConfig,
 						}}}}},
 			}
-		case envoycorev2.SocketAddress_UDP:
-			filterConfig, err := ptypes.MarshalAny(&udpproxyv2.UdpProxyConfig{
+		case envoycorev3.SocketAddress_UDP:
+			filterConfig, err := ptypes.MarshalAny(&udpproxyv3.UdpProxyConfig{
 				StatPrefix: "udp_proxy",
-				RouteSpecifier: &udpproxyv2.UdpProxyConfig_Cluster{
+				RouteSpecifier: &udpproxyv3.UdpProxyConfig_Cluster{
 					Cluster: name,
 				},
 			})
@@ -182,14 +231,14 @@ func envoyConfig(es *egressv1.ExternalService) (string, error) {
 				return "", err
 			}
 
-			listener = &envoyv2.Listener{
+			listener = &envoylistener.Listener{
 				Name: name,
-				Address: &envoycorev2.Address{
-					Address: &envoycorev2.Address_SocketAddress{
-						SocketAddress: &envoycorev2.SocketAddress{
+				Address: &envoycorev3.Address{
+					Address: &envoycorev3.Address_SocketAddress{
+						SocketAddress: &envoycorev3.SocketAddress{
 							Protocol: protocol,
 							Address:  "0.0.0.0",
-							PortSpecifier: &envoycorev2.SocketAddress_PortValue{
+							PortSpecifier: &envoycorev3.SocketAddress_PortValue{
 								PortValue: uint32(port.Port),
 							}}}},
 				FilterChains: []*envoylistener.FilterChain{{

@@ -7,10 +7,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    - name: Set up Go 1.13
+    - name: Set up Go 1.18
       uses: actions/setup-go@v1
       with:
-        go-version: 1.13
+        go-version: 1.18
       id: go
 
     - name: Check out code into the Go module directory
@@ -18,12 +18,8 @@ jobs:
 
     - name: Get dependencies
       run: |
-        go get -v -t -d ./...
-        if [ -f Gopkg.toml ]; then
-            curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
-            dep ensure
-        fi
-        curl -sL https://go.kubebuilder.io/dl/2.2.0/linux/amd64 | tar -xz -C /tmp/
+        go mod download
+        curl -sL https://github.com/kubernetes-sigs/kubebuilder/releases/download/v2.2.0/kubebuilder_2.2.0_linux_amd64.tar.gz | tar -xz -C /tmp/
         sudo mv /tmp/kubebuilder_2.2.0_linux_amd64 /usr/local/kubebuilder
         
         cd coredns-plugin && go get -v -t -d ./...

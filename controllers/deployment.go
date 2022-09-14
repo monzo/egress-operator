@@ -5,7 +5,6 @@ import (
 	"strconv"
 
 	"github.com/golang/protobuf/proto"
-	egressv1 "github.com/monzo/egress-operator/api/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
@@ -14,6 +13,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	egressv1 "github.com/monzo/egress-operator/api/v1"
 )
 
 // +kubebuilder:rbac:namespace=egress-operator-system,groups=apps,resources=deployments,verbs=get;list;watch;create;patch
@@ -107,8 +108,7 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 					Containers: []corev1.Container{
 						{
 							Name: "gateway",
-							// TODO this version doesn't actually support UDP, we need 1.13 which isn't stable
-							Image:           "envoyproxy/envoy-alpine:v1.12.2",
+							Image:           "envoyproxy/envoy-alpine:v1.16.5",
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							Ports:           deploymentPorts(es),
 							VolumeMounts: []corev1.VolumeMount{
@@ -142,6 +142,12 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 								TimeoutSeconds:   1,
 							},
 							Resources: resources,
+							Env: []corev1.EnvVar{
+								{
+									Name:  "ENVOY_UID",
+									Value: "0",
+								},
+							},
 						},
 					},
 					RestartPolicy:                 corev1.RestartPolicyAlways,

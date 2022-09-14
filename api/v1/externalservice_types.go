@@ -53,6 +53,10 @@ type ExternalServiceSpec struct {
 	// If true, add a `egress.monzo.com/hijack-dns: true` label to produced Service objects
 	// CoreDNS can watch this label and decide to rewrite DnsName -> clusterIP
 	HijackDns bool `json:"hijackDns,omitempty"`
+
+	// When set allows overwriting the A records of the DNS being overridden.
+	// +optional
+	IpOverride []string `json:"ipOverride,omitempty"`
 }
 
 type ExternalServicePort struct {
