@@ -88,7 +88,7 @@ staticResources:
             typedConfig:
               '@type': type.googleapis.com/envoy.extensions.access_loggers.file.v3.FileAccessLog
               format: |
-                [%START_TIME%] %BYTES_RECEIVED% %BYTES_SENT% %DURATION% "%DOWNSTREAM_REMOTE_ADDRESS%" "%UPSTREAM_HOST%"
+                [%START_TIME%] %BYTES_RECEIVED% %BYTES_SENT% %DURATION% "%DOWNSTREAM_REMOTE_ADDRESS%" "%UPSTREAM_HOST%" "%UPSTREAM_CLUSTER%"
               path: /dev/stdout
           cluster: foo_TCP_101
           statPrefix: tcp_proxy

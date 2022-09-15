@@ -3,9 +3,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"hash/fnv"
-	"strconv"
-
 	accesslogfilterv3 "github.com/envoyproxy/go-control-plane/envoy/config/accesslog/v3"
 	bootstrap "github.com/envoyproxy/go-control-plane/envoy/config/bootstrap/v3"
 	envoyv3 "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
@@ -13,9 +10,12 @@ import (
 	envoyendpoint "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	envoylistener "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	filev3 "github.com/envoyproxy/go-control-plane/envoy/extensions/access_loggers/file/v3"
+	aggregatev3 "github.com/envoyproxy/go-control-plane/envoy/extensions/clusters/aggregate/v3"
 	tcpproxyv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/tcp_proxy/v3"
-
 	udpproxyv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/udp/udp_proxy/v3"
+	"google.golang.org/protobuf/types/known/wrapperspb"
+	"hash/fnv"
+	"strconv"
 
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/ptypes"
@@ -83,7 +83,7 @@ func adminPort(es *egressv1.ExternalService) int32 {
 	panic("couldn't find a port for admin listener")
 }
 
-const accessLogFormat = `[%START_TIME%] %BYTES_RECEIVED% %BYTES_SENT% %DURATION% "%DOWNSTREAM_REMOTE_ADDRESS%" "%UPSTREAM_HOST%"
+const accessLogFormat = `[%START_TIME%] %BYTES_RECEIVED% %BYTES_SENT% %DURATION% "%DOWNSTREAM_REMOTE_ADDRESS%" "%UPSTREAM_HOST%" "%UPSTREAM_CLUSTER%"
 `
 
 func envoyConfig(es *egressv1.ExternalService) (string, error) {
@@ -107,9 +107,11 @@ func envoyConfig(es *egressv1.ExternalService) (string, error) {
 	}
 
 	for _, port := range es.Spec.Ports {
+		var clusters []*envoyv3.Cluster
 		protocol := protocolToEnvoy(port.Protocol)
 		name := fmt.Sprintf("%s_%s_%s", es.Name, envoycorev3.SocketAddress_Protocol_name[int32(protocol)], strconv.Itoa(int(port.Port)))
-		cluster := &envoyv3.Cluster{
+		clusterNameForListener := name
+		clusters = append(clusters, &envoyv3.Cluster{
 			Name: name,
 			ClusterDiscoveryType: &envoyv3.Cluster_Type{
 				Type: envoyv3.Cluster_LOGICAL_DNS,
@@ -145,38 +147,20 @@ func envoyConfig(es *egressv1.ExternalService) (string, error) {
 					},
 				},
 			},
-		}
+		})
 
 		// If we want to override the normal DNS lookup and set the IP address
 		// overwrite the Hosts field with one for each IP
 		if len(es.Spec.IpOverride) > 0 {
-			cluster.LoadAssignment.Endpoints = []*envoyendpoint.LocalityLbEndpoints{}
-			for _, ip := range es.Spec.IpOverride {
-				cluster.LoadAssignment.Endpoints = append(cluster.LoadAssignment.Endpoints, &envoyendpoint.LocalityLbEndpoints{
-					LbEndpoints: []*envoyendpoint.LbEndpoint{
-						{
-							HostIdentifier: &envoyendpoint.LbEndpoint_Endpoint{
-								Endpoint: &envoyendpoint.Endpoint{
-									Address: &envoycorev3.Address{
-										Address: &envoycorev3.Address_SocketAddress{
-											SocketAddress: &envoycorev3.SocketAddress{
-												Address:  ip,
-												Protocol: protocol,
-												PortSpecifier: &envoycorev3.SocketAddress_PortValue{
-													PortValue: uint32(port.Port),
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				})
+			overrideCluster := generateOverrideCluster(name, es.Spec, port, protocol)
+			clusters = append([]*envoyv3.Cluster{overrideCluster}, clusters...)
+			aggregateCluster, err := generateAggregateCluster(fmt.Sprintf("%v-aggregate", name), overrideCluster.Name, name)
+			if err != nil {
+				return "", err
 			}
-			cluster.ClusterDiscoveryType = &envoyv3.Cluster_Type{
-				Type: envoyv3.Cluster_STATIC,
-			}
+			// Prepend to list
+			clusters = append([]*envoyv3.Cluster{aggregateCluster}, clusters...)
+			clusterNameForListener = aggregateCluster.Name
 		}
 
 		var listener *envoylistener.Listener
@@ -196,7 +180,7 @@ func envoyConfig(es *egressv1.ExternalService) (string, error) {
 				}},
 				StatPrefix: "tcp_proxy",
 				ClusterSpecifier: &tcpproxyv3.TcpProxy_Cluster{
-					Cluster: name,
+					Cluster: clusterNameForListener,
 				},
 			})
 			if err != nil {
@@ -250,7 +234,7 @@ func envoyConfig(es *egressv1.ExternalService) (string, error) {
 			}
 		}
 
-		config.StaticResources.Clusters = append(config.StaticResources.Clusters, cluster)
+		config.StaticResources.Clusters = append(config.StaticResources.Clusters, clusters...)
 		config.StaticResources.Listeners = append(config.StaticResources.Listeners, listener)
 	}
 
@@ -287,4 +271,90 @@ func configmap(es *egressv1.ExternalService) (*corev1.ConfigMap, string, error) 
 		},
 		Data: map[string]string{"envoy.yaml": ec},
 	}, fmt.Sprintf("%x", sum), nil
+}
+
+func generateOverrideCluster(name string, spec egressv1.ExternalServiceSpec, port egressv1.ExternalServicePort, protocol envoycorev3.SocketAddress_Protocol) *envoyv3.Cluster {
+	overrideClusterName := fmt.Sprintf("%v-override", name)
+	var endpoints []*envoyendpoint.LocalityLbEndpoints
+
+	for _, ip := range spec.IpOverride {
+		endpoints = append(endpoints, &envoyendpoint.LocalityLbEndpoints{
+			LbEndpoints: []*envoyendpoint.LbEndpoint{
+				{
+					HostIdentifier: &envoyendpoint.LbEndpoint_Endpoint{
+						Endpoint: &envoyendpoint.Endpoint{
+							HealthCheckConfig: &envoyendpoint.Endpoint_HealthCheckConfig{
+								PortValue: uint32(port.Port),
+							},
+							Address: &envoycorev3.Address{
+								Address: &envoycorev3.Address_SocketAddress{
+									SocketAddress: &envoycorev3.SocketAddress{
+										Address:  ip,
+										Protocol: protocol,
+										PortSpecifier: &envoycorev3.SocketAddress_PortValue{
+											PortValue: uint32(port.Port),
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		})
+	}
+	return &envoyv3.Cluster{
+		Name: overrideClusterName,
+		ClusterDiscoveryType: &envoyv3.Cluster_Type{
+			Type: envoyv3.Cluster_STATIC,
+		},
+		ConnectTimeout: &duration.Duration{
+			Seconds: 1,
+		},
+		CloseConnectionsOnHostHealthFailure: true,
+		HealthChecks: []*envoycorev3.HealthCheck{
+			{
+				Timeout: &duration.Duration{
+					Seconds: 1,
+				},
+				Interval: &duration.Duration{
+					Seconds: 10,
+				},
+				ReuseConnection:    wrapperspb.Bool(false),
+				UnhealthyThreshold: wrapperspb.UInt32(2),
+				HealthyThreshold:   wrapperspb.UInt32(3),
+				EventLogPath:       "/dev/stdout",
+				HealthChecker:      &envoycorev3.HealthCheck_TcpHealthCheck_{},
+			},
+		},
+		LbPolicy:        envoyv3.Cluster_ROUND_ROBIN,
+		DnsLookupFamily: envoyv3.Cluster_V4_ONLY,
+		LoadAssignment: &envoyendpoint.ClusterLoadAssignment{
+			ClusterName: overrideClusterName,
+			Endpoints:   endpoints,
+		},
+	}
+}
+
+func generateAggregateCluster(name string, clusters ...string) (*envoyv3.Cluster, error) {
+	aggregateClusterConfig, err := ptypes.MarshalAny(&aggregatev3.ClusterConfig{
+		Clusters: clusters,
+	})
+	if err != nil {
+		return nil, err
+	}
+	cluster := &envoyv3.Cluster{
+		Name: name,
+		ConnectTimeout: &duration.Duration{
+			Seconds: 1,
+		},
+		LbPolicy: envoyv3.Cluster_CLUSTER_PROVIDED,
+		ClusterDiscoveryType: &envoyv3.Cluster_ClusterType{
+			ClusterType: &envoyv3.Cluster_CustomClusterType{
+				Name:        "envoy.clusters.aggregate",
+				TypedConfig: aggregateClusterConfig,
+			},
+		},
+	}
+	return cluster, nil
 }
