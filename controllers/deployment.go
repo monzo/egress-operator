@@ -107,7 +107,7 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name: "gateway",
+							Name:            "gateway",
 							Image:           "envoyproxy/envoy-alpine:v1.16.5",
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							Ports:           deploymentPorts(es),
