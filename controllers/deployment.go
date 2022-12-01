@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"os"
 	"strconv"
 
 	"github.com/golang/protobuf/proto"
@@ -65,6 +66,31 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 	a["egress.monzo.com/config-hash"] = configHash
 	a["egress.monzo.com/admin-port"] = strconv.Itoa(int(adPort))
 
+	img := "envoyproxy/envoy-alpine:v1.16.5"
+	if i, ok := os.LookupEnv("ENVOY_IMAGE"); ok {
+		img = i
+	}
+
+	var tolerations []corev1.Toleration
+	tk, kok := os.LookupEnv("TAINT_TOLERATION_KEY")
+	tv, vok := os.LookupEnv("TAINT_TOLERATION_VALUE")
+	if kok && vok {
+		tolerations = append(tolerations, corev1.Toleration{
+			Key:      tk,
+			Value: 		tv,
+			Effect:   corev1.TaintEffectNoSchedule,
+		})
+	}
+
+	var nodeSelector map[string]string
+	nk, kok := os.LookupEnv("NODE_SELECTOR_KEY")
+	nv, vok := os.LookupEnv("NODE_SELECTOR_VALUE")
+	if kok && vok {
+		nodeSelector = map[string]string{
+			nk: nv,
+		}
+	}
+
 	var resources corev1.ResourceRequirements
 	if es.Spec.Resources != nil {
 		resources = *es.Spec.Resources
@@ -105,10 +131,12 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 					Annotations: a,
 				},
 				Spec: corev1.PodSpec{
+					Tolerations: tolerations,
+					NodeSelector: nodeSelector,
 					Containers: []corev1.Container{
 						{
-							Name: "gateway",
-							Image:           "envoyproxy/envoy-alpine:v1.16.5",
+							Name:            "gateway",
+							Image:           img,
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							Ports:           deploymentPorts(es),
 							VolumeMounts: []corev1.VolumeMount{
