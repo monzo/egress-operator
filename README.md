@@ -1,9 +1,9 @@
 # egress-operator
 An operator to produce egress gateway pods and control access to them with network policies, and a coredns plugin to route egress traffic to these pods.
 
-The idea is that instead of authorizing egress traffic with protocol inspection, 
+The idea is that instead of authorizing egress traffic with protocol inspection,
 you instead create a internal clusterIP for every external service you use, lock
-it down to only a few pods via a network policy, and then set up your dns server 
+it down to only a few pods via a network policy, and then set up your dns server
 to resolve the external service to that clusterIP.
 
 Built with kubebuilder: https://book.kubebuilder.io/
@@ -22,7 +22,7 @@ In the `egress-operator-system` namespace, it creates:
 2. Your local system must have a recent version of `golang` for building the code, which you can install by following instructions [here](https://golang.org/doc/install).
 3. Your local system must have Kubebuilder for code generation, which you can install by following instructions [here](https://book.kubebuilder.io/quick-start.html).
 4. Your local system must have Kustomize for building the Kubernetes manifests, which you can install by following instructions [here](https://kubernetes-sigs.github.io/kustomize/installation/).
-5. Your cluster must be running CoreDNS instead of kube-dns, which may not be the case if you are using a managed Kubernetes service. [This article](https://medium.com/google-cloud/using-coredns-on-gke-3973598ab561) provides some help for GCP Kubernetes Engine, and guidance for AWS Elastic Kubernetes Service can be found [here](https://docs.aws.amazon.com/eks/latest/userguide/coredns.html). 
+5. Your cluster must be running CoreDNS instead of kube-dns, which may not be the case if you are using a managed Kubernetes service. [This article](https://medium.com/google-cloud/using-coredns-on-gke-3973598ab561) provides some help for GCP Kubernetes Engine, and guidance for AWS Elastic Kubernetes Service can be found [here](https://docs.aws.amazon.com/eks/latest/userguide/coredns.html).
 
 ## Installing
 
@@ -30,7 +30,7 @@ In the `egress-operator-system` namespace, it creates:
 
 ```bash
 make run
-``` 
+```
 This creates an ExternalService object to see the controller-manager creating managed resources in the remote cluster.
 
 ### Setting up CoreDNS plugin
@@ -132,9 +132,49 @@ spec:
         # ensure your internal IP range is allowed here
         # traffic to external IPs will not be allowed from this namespace.
         # therefore, pods will have to use egress gateways
-        cidr: 10.0.0.0/8 
+        cidr: 10.0.0.0/8
 ```
 
-If you already have a default deny egress policy, the above won't be needed. You'll instead want to explicitly allow 
+If you already have a default deny egress policy, the above won't be needed. You'll instead want to explicitly allow
 egress from your pods to all gateway pods. The ingress policies on gateway pods will ensure that only correct traffic is
 allowed.
+
+### Configuration
+
+Global configuration of the operator is set using environment variables.
+
+Node Selectors and Taint tolerations can be added to gateway pods to ensure pods
+run on nodes that are permitted to access the internet. Example:
+
+```yaml
+env:
+- name: NODE_SELECTOR_KEY
+  value: role
+- name: NODE_SELECTOR_VALUE
+  value: egress-pods
+- name: TAINT_TOLERATION_KEY
+  value: egress-pods
+- name: TAINT_TOLERATION_VALUE
+  value: "true"
+```
+
+Results in this gateway pod configuration:
+
+```yaml
+spec:
+  nodeSelector:
+    role: egress-pods
+  tolerations:
+  - effect: NoSchedule
+    key: egress-pods
+    value: "true"
+  ...
+```
+
+| Variable name          | Default                           | Description                                        |
+| ---------------------- | --------------------------------- | -------------------------------------------------- |
+| ENVOY_IMAGE            | `envoyproxy/envoy-alpine:v1.16.5` | Name of the Envoy Proxy image to use               |
+| TAINT_TOLERATION_KEY   | Empty, no tolerations applied     | Toleration key to apply to gateway pods            |
+| TAINT_TOLERATION_VALUE | Empty, no tolerations applied     | Toleration value to apply to gateway pods          |
+| NODE_SELECTOR_KEY      | Empty, no node selector added     | Node selector label key to apply to gateway pods   |
+| NODE_SELECTOR_VALUE    | Empty, no node selector added     | Node selector label value to apply to gateway pods |
