@@ -134,6 +134,9 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 		}
 	}
 
+	maxUnavailableStr := lookupEnvOr("ROLLING_UPDATE_MAX_UNAVAILABLE", "25%")
+	maxSurgeStr := lookupEnvOr("ROLLING_UPDATE_MAX_SURGE", "25%")
+
 	var resources corev1.ResourceRequirements
 	if es.Spec.Resources != nil {
 		resources = *es.Spec.Resources
@@ -150,6 +153,9 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 		}
 	}
 
+	maxUnavailable := intstr.FromString(maxUnavailableStr)
+	maxSurge := intstr.FromString(maxSurgeStr)
+
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        es.Name,
@@ -163,8 +169,8 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 			Strategy: appsv1.DeploymentStrategy{
 				Type: appsv1.RollingUpdateDeploymentStrategyType,
 				RollingUpdate: &appsv1.RollingUpdateDeployment{
-					MaxUnavailable: intstr.ValueOrDefault(nil, intstr.FromString("25%")),
-					MaxSurge:       intstr.ValueOrDefault(nil, intstr.FromString("25%")),
+					MaxUnavailable: &maxUnavailable,
+					MaxSurge:       &maxSurge,
 				},
 			},
 			Selector: labelSelector,
@@ -244,4 +250,12 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 			},
 		},
 	}
+}
+
+func lookupEnvOr(envKey, envDefaultValue string) string {
+	valueStr, isSet := os.LookupEnv(envKey)
+	if !isSet || len(valueStr) == 0 {
+		return envDefaultValue
+	}
+	return valueStr
 }
