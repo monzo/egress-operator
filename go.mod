@@ -9,6 +9,7 @@ require (
 	github.com/google/go-cmp v0.5.7
 	github.com/onsi/ginkgo v1.8.0
 	github.com/onsi/gomega v1.5.0
+	google.golang.org/protobuf v1.28.0
 	k8s.io/api v0.0.0-20190918155943-95b840bb6a1f
 	k8s.io/apimachinery v0.0.0-20190913080033-27d36303b655
 	k8s.io/client-go v0.0.0-20190918160344-1fbdaa4c8d90
@@ -46,16 +47,16 @@ require (
 	go.uber.org/atomic v1.3.2 // indirect
 	go.uber.org/multierr v1.1.0 // indirect
 	go.uber.org/zap v1.9.1 // indirect
-	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9 // indirect
-	golang.org/x/net v0.0.0-20210813160813-60bc85c4be6d // indirect
+	golang.org/x/crypto v0.7.0 // indirect
+	golang.org/x/net v0.8.0 // indirect
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8 // indirect
-	golang.org/x/sys v0.0.0-20220817070843-5a390386f1f2 // indirect
-	golang.org/x/text v0.3.7 // indirect
+	golang.org/x/sys v0.6.0 // indirect
+	golang.org/x/term v0.6.0 // indirect
+	golang.org/x/text v0.8.0 // indirect
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.0.1 // indirect
 	google.golang.org/appengine v1.6.6 // indirect
-	google.golang.org/protobuf v1.28.0 // indirect
 	gopkg.in/fsnotify.v1 v1.4.7 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
