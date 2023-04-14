@@ -66,7 +66,7 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 	a["egress.monzo.com/config-hash"] = configHash
 	a["egress.monzo.com/admin-port"] = strconv.Itoa(int(adPort))
 
-	img := "envoyproxy/envoy-alpine:v1.16.5"
+	img := "envoyproxy/envoy-alpine:v1.25.5"
 	if i, ok := os.LookupEnv("ENVOY_IMAGE"); ok {
 		img = i
 	}
@@ -76,9 +76,9 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 	tv, vok := os.LookupEnv("TAINT_TOLERATION_VALUE")
 	if kok && vok {
 		tolerations = append(tolerations, corev1.Toleration{
-			Key:      tk,
-			Value: 		tv,
-			Effect:   corev1.TaintEffectNoSchedule,
+			Key:    tk,
+			Value:  tv,
+			Effect: corev1.TaintEffectNoSchedule,
 		})
 	}
 
@@ -131,7 +131,7 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 					Annotations: a,
 				},
 				Spec: corev1.PodSpec{
-					Tolerations: tolerations,
+					Tolerations:  tolerations,
 					NodeSelector: nodeSelector,
 					Containers: []corev1.Container{
 						{
