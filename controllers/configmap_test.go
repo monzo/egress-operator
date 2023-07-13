@@ -47,6 +47,11 @@ staticResources:
                 protocol: UDP
     name: foo_UDP_100
     type: LOGICAL_DNS
+    upstreamConnectionOptions:
+      tcpKeepalive:
+        keepaliveInterval: 5
+        keepaliveProbes: 3
+        keepaliveTime: 30
   - connectTimeout: 1s
     dnsLookupFamily: V4_ONLY
     loadAssignment:
@@ -60,6 +65,11 @@ staticResources:
                 portValue: 101
     name: foo_TCP_101
     type: LOGICAL_DNS
+    upstreamConnectionOptions:
+      tcpKeepalive:
+        keepaliveInterval: 5
+        keepaliveProbes: 3
+        keepaliveTime: 30
   listeners:
   - address:
       socketAddress:
