@@ -3,6 +3,9 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
+	"strconv"
+
 	accesslogfilterv3 "github.com/envoyproxy/go-control-plane/envoy/config/accesslog/v3"
 	bootstrap "github.com/envoyproxy/go-control-plane/envoy/config/bootstrap/v3"
 	envoyv3 "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
@@ -14,8 +17,6 @@ import (
 	tcpproxyv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/tcp_proxy/v3"
 	udpproxyv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/udp/udp_proxy/v3"
 	"google.golang.org/protobuf/types/known/wrapperspb"
-	"hash/fnv"
-	"strconv"
 
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/ptypes"
@@ -121,6 +122,13 @@ func envoyConfig(es *egressv1.ExternalService) (string, error) {
 			},
 			LbPolicy:        envoyv3.Cluster_ROUND_ROBIN,
 			DnsLookupFamily: envoyv3.Cluster_V4_ONLY,
+			UpstreamConnectionOptions: &envoyv3.UpstreamConnectionOptions{
+				TcpKeepalive: &envoycorev3.TcpKeepalive{
+					KeepaliveProbes:   &wrapperspb.UInt32Value{Value: 3},
+					KeepaliveTime:     &wrapperspb.UInt32Value{Value: 30},
+					KeepaliveInterval: &wrapperspb.UInt32Value{Value: 5},
+				},
+			},
 			LoadAssignment: &envoyendpoint.ClusterLoadAssignment{
 				ClusterName: name,
 				Endpoints: []*envoyendpoint.LocalityLbEndpoints{
