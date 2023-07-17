@@ -86,6 +86,11 @@ func (r *ExternalServiceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 
+	if err := r.reconcilePodDisruptionBudget(ctx, req, es); err != nil {
+		log.Error(err, "unable to reconcile PodDisruptionBudget")
+		return ctrl.Result{}, err
+	}
+
 	return ctrl.Result{}, nil
 }
 

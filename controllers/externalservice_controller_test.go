@@ -15,6 +15,7 @@ import (
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -200,5 +201,18 @@ func assertState(key types.NamespacedName, es *v1.ExternalService) {
 		}, Equal(autoscaler(es).Spec)),
 		assertOwner(key.Name),
 		assertLabels(autoscaler(es)),
+	))
+
+	Eventually(func() *policyv1beta1.PodDisruptionBudget {
+		p := &policyv1beta1.PodDisruptionBudget{}
+		_ = k8sClient.Get(context.Background(), key, p)
+
+		return p
+	}, timeout, interval).Should(And(
+		WithTransform(func(d *policyv1beta1.PodDisruptionBudget) policyv1beta1.PodDisruptionBudgetSpec {
+			return d.Spec
+		}, Equal(pdb(es).Spec)),
+		assertOwner(key.Name),
+		assertLabels(pdb(es)),
 	))
 }
