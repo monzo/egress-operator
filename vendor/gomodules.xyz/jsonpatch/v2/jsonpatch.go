@@ -1,7 +1,6 @@
 package jsonpatch
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -24,21 +23,28 @@ func (j *Operation) Json() string {
 }
 
 func (j *Operation) MarshalJSON() ([]byte, error) {
-	var b bytes.Buffer
-	b.WriteString("{")
-	b.WriteString(fmt.Sprintf(`"op":"%s"`, j.Operation))
-	b.WriteString(fmt.Sprintf(`,"path":"%s"`, j.Path))
-	// Consider omitting Value for non-nullable operations.
-	if j.Value != nil || j.Operation == "replace" || j.Operation == "add" {
-		v, err := json.Marshal(j.Value)
-		if err != nil {
-			return nil, err
-		}
-		b.WriteString(`,"value":`)
-		b.Write(v)
+	// Ensure for add and replace we emit `value: null`
+	if j.Value == nil && (j.Operation == "replace" || j.Operation == "add") {
+		return json.Marshal(struct {
+			Operation string      `json:"op"`
+			Path      string      `json:"path"`
+			Value     interface{} `json:"value"`
+		}{
+			Operation: j.Operation,
+			Path:      j.Path,
+		})
 	}
-	b.WriteString("}")
-	return b.Bytes(), nil
+	// otherwise just marshal normally. We cannot literally do json.Marshal(j) as it would be recursively
+	// calling this function.
+	return json.Marshal(struct {
+		Operation string      `json:"op"`
+		Path      string      `json:"path"`
+		Value     interface{} `json:"value,omitempty"`
+	}{
+		Operation: j.Operation,
+		Path:      j.Path,
+		Value:     j.Value,
+	})
 }
 
 type ByPath []Operation
@@ -47,8 +53,8 @@ func (a ByPath) Len() int           { return len(a) }
 func (a ByPath) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a ByPath) Less(i, j int) bool { return a[i].Path < a[j].Path }
 
-func NewPatch(operation, path string, value interface{}) Operation {
-	return Operation{Operation: operation, Path: path, Value: value}
+func NewOperation(op, path string, value interface{}) Operation {
+	return Operation{Operation: op, Path: path, Value: value}
 }
 
 // CreatePatch creates a patch as specified in http://jsonpatch.com/
@@ -149,9 +155,6 @@ func makePath(path string, newPart interface{}) string {
 	if path == "" {
 		return "/" + key
 	}
-	if strings.HasSuffix(path, "/") {
-		return path + key
-	}
 	return path + "/" + key
 }
 
@@ -162,7 +165,7 @@ func diff(a, b map[string]interface{}, path string, patch []Operation) ([]Operat
 		av, ok := a[key]
 		// value was added
 		if !ok {
-			patch = append(patch, NewPatch("add", p, bv))
+			patch = append(patch, NewOperation("add", p, bv))
 			continue
 		}
 		// Types are the same, compare values
@@ -178,7 +181,7 @@ func diff(a, b map[string]interface{}, path string, patch []Operation) ([]Operat
 		if !found {
 			p := makePath(path, key)
 
-			patch = append(patch, NewPatch("remove", p, nil))
+			patch = append(patch, NewOperation("remove", p, nil))
 		}
 	}
 	return patch, nil
@@ -191,11 +194,9 @@ func handleValues(av, bv interface{}, p string, patch []Operation) ([]Operation,
 		if at == nil && bt == nil {
 			// do nothing
 			return patch, nil
-		} else if at == nil && bt != nil {
-			return append(patch, NewPatch("add", p, bv)), nil
 		} else if at != bt {
 			// If types have changed, replace completely (preserves null in destination)
-			return append(patch, NewPatch("replace", p, bv)), nil
+			return append(patch, NewOperation("replace", p, bv)), nil
 		}
 	}
 
@@ -209,26 +210,22 @@ func handleValues(av, bv interface{}, p string, patch []Operation) ([]Operation,
 		}
 	case string, float64, bool:
 		if !matchesValue(av, bv) {
-			patch = append(patch, NewPatch("replace", p, bv))
+			patch = append(patch, NewOperation("replace", p, bv))
 		}
 	case []interface{}:
 		bt := bv.([]interface{})
-		if isSimpleArray(at) && isSimpleArray(bt) {
-			patch = append(patch, compareEditDistance(at, bt, p)...)
-		} else {
-			n := min(len(at), len(bt))
-			for i := len(at) - 1; i >= n; i-- {
-				patch = append(patch, NewPatch("remove", makePath(p, i), nil))
-			}
-			for i := n; i < len(bt); i++ {
-				patch = append(patch, NewPatch("add", makePath(p, i), bt[i]))
-			}
-			for i := 0; i < n; i++ {
-				var err error
-				patch, err = handleValues(at[i], bt[i], makePath(p, i), patch)
-				if err != nil {
-					return nil, err
-				}
+		n := min(len(at), len(bt))
+		for i := len(at) - 1; i >= n; i-- {
+			patch = append(patch, NewOperation("remove", makePath(p, i), nil))
+		}
+		for i := n; i < len(bt); i++ {
+			patch = append(patch, NewOperation("add", makePath(p, i), bt[i]))
+		}
+		for i := 0; i < n; i++ {
+			var err error
+			patch, err = handleValues(at[i], bt[i], makePath(p, i), patch)
+			if err != nil {
+				return nil, err
 			}
 		}
 	default:
@@ -237,100 +234,9 @@ func handleValues(av, bv interface{}, p string, patch []Operation) ([]Operation,
 	return patch, nil
 }
 
-func isBasicType(a interface{}) bool {
-	switch a.(type) {
-	case string, float64, bool:
-	default:
-		return false
-	}
-	return true
-}
-
-func isSimpleArray(a []interface{}) bool {
-	for i := range a {
-		switch a[i].(type) {
-		case string, float64, bool:
-		default:
-			val := reflect.ValueOf(a[i])
-			if val.Kind() == reflect.Map {
-				for _, k := range val.MapKeys() {
-					av := val.MapIndex(k)
-					if av.Kind() == reflect.Ptr || av.Kind() == reflect.Interface {
-						if av.IsNil() {
-							continue
-						}
-						av = av.Elem()
-					}
-					if av.Kind() != reflect.String && av.Kind() != reflect.Float64 && av.Kind() != reflect.Bool {
-						return false
-					}
-				}
-				return true
-			}
-			return false
-		}
-	}
-	return true
-}
-
-// https://en.wikipedia.org/wiki/Wagner%E2%80%93Fischer_algorithm
-// Adapted from https://github.com/texttheater/golang-levenshtein
-func compareEditDistance(s, t []interface{}, p string) []Operation {
-	m := len(s)
-	n := len(t)
-
-	d := make([][]int, m+1)
-	for i := 0; i <= m; i++ {
-		d[i] = make([]int, n+1)
-		d[i][0] = i
-	}
-	for j := 0; j <= n; j++ {
-		d[0][j] = j
-	}
-
-	for j := 1; j <= n; j++ {
-		for i := 1; i <= m; i++ {
-			if reflect.DeepEqual(s[i-1], t[j-1]) {
-				d[i][j] = d[i-1][j-1] // no op required
-			} else {
-				del := d[i-1][j] + 1
-				add := d[i][j-1] + 1
-				rep := d[i-1][j-1] + 1
-				d[i][j] = min(rep, min(add, del))
-			}
-		}
-	}
-
-	return backtrace(s, t, p, m, n, d)
-}
-
 func min(x int, y int) int {
 	if y < x {
 		return y
 	}
 	return x
-}
-
-func backtrace(s, t []interface{}, p string, i int, j int, matrix [][]int) []Operation {
-	if i > 0 && matrix[i-1][j]+1 == matrix[i][j] {
-		op := NewPatch("remove", makePath(p, i-1), nil)
-		return append([]Operation{op}, backtrace(s, t, p, i-1, j, matrix)...)
-	}
-	if j > 0 && matrix[i][j-1]+1 == matrix[i][j] {
-		op := NewPatch("add", makePath(p, i), t[j-1])
-		return append([]Operation{op}, backtrace(s, t, p, i, j-1, matrix)...)
-	}
-	if i > 0 && j > 0 && matrix[i-1][j-1]+1 == matrix[i][j] {
-		if isBasicType(s[0]) {
-			op := NewPatch("replace", makePath(p, i-1), t[j-1])
-			return append([]Operation{op}, backtrace(s, t, p, i-1, j-1, matrix)...)
-		}
-
-		p2, _ := handleValues(s[i-1], t[j-1], makePath(p, i-1), []Operation{})
-		return append(p2, backtrace(s, t, p, i-1, j-1, matrix)...)
-	}
-	if i > 0 && j > 0 && matrix[i-1][j-1] == matrix[i][j] {
-		return backtrace(s, t, p, i-1, j-1, matrix)
-	}
-	return []Operation{}
 }

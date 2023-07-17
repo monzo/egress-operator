@@ -20,7 +20,7 @@ import (
 	"sync"
 	"time"
 
-	"k8s.io/apimachinery/pkg/util/clock"
+	"k8s.io/utils/clock"
 )
 
 // This file provides abstractions for setting the provider (e.g., prometheus)
@@ -131,16 +131,14 @@ func (m *defaultQueueMetrics) updateUnfinishedWork() {
 	var total float64
 	var oldest float64
 	for _, t := range m.processingStartTimes {
-		age := m.sinceInMicroseconds(t)
+		age := m.sinceInSeconds(t)
 		total += age
 		if age > oldest {
 			oldest = age
 		}
 	}
-	// Convert to seconds; microseconds is unhelpfully granular for this.
-	total /= 1000000
 	m.unfinishedWorkSeconds.Set(total)
-	m.longestRunningProcessor.Set(oldest / 1000000)
+	m.longestRunningProcessor.Set(oldest)
 }
 
 type noMetrics struct{}
@@ -149,11 +147,6 @@ func (noMetrics) add(item t)            {}
 func (noMetrics) get(item t)            {}
 func (noMetrics) done(item t)           {}
 func (noMetrics) updateUnfinishedWork() {}
-
-// Gets the time since the specified start in microseconds.
-func (m *defaultQueueMetrics) sinceInMicroseconds(start time.Time) float64 {
-	return float64(m.clock.Since(start).Nanoseconds() / time.Microsecond.Nanoseconds())
-}
 
 // Gets the time since the specified start in seconds.
 func (m *defaultQueueMetrics) sinceInSeconds(start time.Time) float64 {
@@ -251,13 +244,18 @@ func (f *queueMetricsFactory) newQueueMetrics(name string, clock clock.Clock) qu
 	}
 }
 
-func newRetryMetrics(name string) retryMetrics {
+func newRetryMetrics(name string, provider MetricsProvider) retryMetrics {
 	var ret *defaultRetryMetrics
 	if len(name) == 0 {
 		return ret
 	}
+
+	if provider == nil {
+		provider = globalMetricsFactory.metricsProvider
+	}
+
 	return &defaultRetryMetrics{
-		retries: globalMetricsFactory.metricsProvider.NewRetriesMetric(name),
+		retries: provider.NewRetriesMetric(name),
 	}
 }
 

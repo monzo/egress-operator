@@ -22,55 +22,56 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-// client is a client.Client that reads and writes directly from/to an API server.  It lazily initializes
-// new clients at the time they are used, and caches the client.
+var _ Reader = &typedClient{}
+var _ Writer = &typedClient{}
+
 type typedClient struct {
-	cache      clientCache
+	resources  *clientRestResources
 	paramCodec runtime.ParameterCodec
 }
 
-// Create implements client.Client
-func (c *typedClient) Create(ctx context.Context, obj runtime.Object, opts ...CreateOption) error {
-	o, err := c.cache.getObjMeta(obj)
+// Create implements client.Client.
+func (c *typedClient) Create(ctx context.Context, obj Object, opts ...CreateOption) error {
+	o, err := c.resources.getObjMeta(obj)
 	if err != nil {
 		return err
 	}
 
 	createOpts := &CreateOptions{}
 	createOpts.ApplyOptions(opts)
+
 	return o.Post().
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Body(obj).
 		VersionedParams(createOpts.AsCreateOptions(), c.paramCodec).
-		Context(ctx).
-		Do().
+		Do(ctx).
 		Into(obj)
 }
 
-// Update implements client.Client
-func (c *typedClient) Update(ctx context.Context, obj runtime.Object, opts ...UpdateOption) error {
-	o, err := c.cache.getObjMeta(obj)
+// Update implements client.Client.
+func (c *typedClient) Update(ctx context.Context, obj Object, opts ...UpdateOption) error {
+	o, err := c.resources.getObjMeta(obj)
 	if err != nil {
 		return err
 	}
 
 	updateOpts := &UpdateOptions{}
 	updateOpts.ApplyOptions(opts)
+
 	return o.Put().
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.GetName()).
 		Body(obj).
 		VersionedParams(updateOpts.AsUpdateOptions(), c.paramCodec).
-		Context(ctx).
-		Do().
+		Do(ctx).
 		Into(obj)
 }
 
-// Delete implements client.Client
-func (c *typedClient) Delete(ctx context.Context, obj runtime.Object, opts ...DeleteOption) error {
-	o, err := c.cache.getObjMeta(obj)
+// Delete implements client.Client.
+func (c *typedClient) Delete(ctx context.Context, obj Object, opts ...DeleteOption) error {
+	o, err := c.resources.getObjMeta(obj)
 	if err != nil {
 		return err
 	}
@@ -83,14 +84,13 @@ func (c *typedClient) Delete(ctx context.Context, obj runtime.Object, opts ...De
 		Resource(o.resource()).
 		Name(o.GetName()).
 		Body(deleteOpts.AsDeleteOptions()).
-		Context(ctx).
-		Do().
+		Do(ctx).
 		Error()
 }
 
-// DeleteAllOf implements client.Client
-func (c *typedClient) DeleteAllOf(ctx context.Context, obj runtime.Object, opts ...DeleteAllOfOption) error {
-	o, err := c.cache.getObjMeta(obj)
+// DeleteAllOf implements client.Client.
+func (c *typedClient) DeleteAllOf(ctx context.Context, obj Object, opts ...DeleteAllOfOption) error {
+	o, err := c.resources.getObjMeta(obj)
 	if err != nil {
 		return err
 	}
@@ -103,14 +103,13 @@ func (c *typedClient) DeleteAllOf(ctx context.Context, obj runtime.Object, opts 
 		Resource(o.resource()).
 		VersionedParams(deleteAllOfOpts.AsListOptions(), c.paramCodec).
 		Body(deleteAllOfOpts.AsDeleteOptions()).
-		Context(ctx).
-		Do().
+		Do(ctx).
 		Error()
 }
 
-// Patch implements client.Client
-func (c *typedClient) Patch(ctx context.Context, obj runtime.Object, patch Patch, opts ...PatchOption) error {
-	o, err := c.cache.getObjMeta(obj)
+// Patch implements client.Client.
+func (c *typedClient) Patch(ctx context.Context, obj Object, patch Patch, opts ...PatchOption) error {
+	o, err := c.resources.getObjMeta(obj)
 	if err != nil {
 		return err
 	}
@@ -121,50 +120,101 @@ func (c *typedClient) Patch(ctx context.Context, obj runtime.Object, patch Patch
 	}
 
 	patchOpts := &PatchOptions{}
+	patchOpts.ApplyOptions(opts)
+
 	return o.Patch(patch.Type()).
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.GetName()).
-		VersionedParams(patchOpts.ApplyOptions(opts).AsPatchOptions(), c.paramCodec).
+		VersionedParams(patchOpts.AsPatchOptions(), c.paramCodec).
 		Body(data).
-		Context(ctx).
-		Do().
+		Do(ctx).
 		Into(obj)
 }
 
-// Get implements client.Client
-func (c *typedClient) Get(ctx context.Context, key ObjectKey, obj runtime.Object) error {
-	r, err := c.cache.getResource(obj)
+// Get implements client.Client.
+func (c *typedClient) Get(ctx context.Context, key ObjectKey, obj Object, opts ...GetOption) error {
+	r, err := c.resources.getResource(obj)
 	if err != nil {
 		return err
 	}
+	getOpts := GetOptions{}
+	getOpts.ApplyOptions(opts)
 	return r.Get().
 		NamespaceIfScoped(key.Namespace, r.isNamespaced()).
 		Resource(r.resource()).
-		Context(ctx).
-		Name(key.Name).Do().Into(obj)
+		VersionedParams(getOpts.AsGetOptions(), c.paramCodec).
+		Name(key.Name).Do(ctx).Into(obj)
 }
 
-// List implements client.Client
-func (c *typedClient) List(ctx context.Context, obj runtime.Object, opts ...ListOption) error {
-	r, err := c.cache.getResource(obj)
+// List implements client.Client.
+func (c *typedClient) List(ctx context.Context, obj ObjectList, opts ...ListOption) error {
+	r, err := c.resources.getResource(obj)
 	if err != nil {
 		return err
 	}
+
 	listOpts := ListOptions{}
 	listOpts.ApplyOptions(opts)
+
 	return r.Get().
 		NamespaceIfScoped(listOpts.Namespace, r.isNamespaced()).
 		Resource(r.resource()).
 		VersionedParams(listOpts.AsListOptions(), c.paramCodec).
-		Context(ctx).
-		Do().
+		Do(ctx).
 		Into(obj)
 }
 
-// UpdateStatus used by StatusWriter to write status.
-func (c *typedClient) UpdateStatus(ctx context.Context, obj runtime.Object, opts ...UpdateOption) error {
-	o, err := c.cache.getObjMeta(obj)
+func (c *typedClient) GetSubResource(ctx context.Context, obj, subResourceObj Object, subResource string, opts ...SubResourceGetOption) error {
+	o, err := c.resources.getObjMeta(obj)
+	if err != nil {
+		return err
+	}
+
+	if subResourceObj.GetName() == "" {
+		subResourceObj.SetName(obj.GetName())
+	}
+
+	getOpts := &SubResourceGetOptions{}
+	getOpts.ApplyOptions(opts)
+
+	return o.Get().
+		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
+		Resource(o.resource()).
+		Name(o.GetName()).
+		SubResource(subResource).
+		VersionedParams(getOpts.AsGetOptions(), c.paramCodec).
+		Do(ctx).
+		Into(subResourceObj)
+}
+
+func (c *typedClient) CreateSubResource(ctx context.Context, obj Object, subResourceObj Object, subResource string, opts ...SubResourceCreateOption) error {
+	o, err := c.resources.getObjMeta(obj)
+	if err != nil {
+		return err
+	}
+
+	if subResourceObj.GetName() == "" {
+		subResourceObj.SetName(obj.GetName())
+	}
+
+	createOpts := &SubResourceCreateOptions{}
+	createOpts.ApplyOptions(opts)
+
+	return o.Post().
+		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
+		Resource(o.resource()).
+		Name(o.GetName()).
+		SubResource(subResource).
+		Body(subResourceObj).
+		VersionedParams(createOpts.AsCreateOptions(), c.paramCodec).
+		Do(ctx).
+		Into(subResourceObj)
+}
+
+// UpdateSubResource used by SubResourceWriter to write status.
+func (c *typedClient) UpdateSubResource(ctx context.Context, obj Object, subResource string, opts ...SubResourceUpdateOption) error {
+	o, err := c.resources.getObjMeta(obj)
 	if err != nil {
 		return err
 	}
@@ -172,39 +222,58 @@ func (c *typedClient) UpdateStatus(ctx context.Context, obj runtime.Object, opts
 	// wrapped to improve the UX ?
 	// It will be nice to receive an error saying the object doesn't implement
 	// status subresource and check CRD definition
+	updateOpts := &SubResourceUpdateOptions{}
+	updateOpts.ApplyOptions(opts)
+
+	body := obj
+	if updateOpts.SubResourceBody != nil {
+		body = updateOpts.SubResourceBody
+	}
+	if body.GetName() == "" {
+		body.SetName(obj.GetName())
+	}
+	if body.GetNamespace() == "" {
+		body.SetNamespace(obj.GetNamespace())
+	}
+
 	return o.Put().
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.GetName()).
-		SubResource("status").
-		Body(obj).
-		VersionedParams((&UpdateOptions{}).ApplyOptions(opts).AsUpdateOptions(), c.paramCodec).
-		Context(ctx).
-		Do().
-		Into(obj)
+		SubResource(subResource).
+		Body(body).
+		VersionedParams(updateOpts.AsUpdateOptions(), c.paramCodec).
+		Do(ctx).
+		Into(body)
 }
 
-// PatchStatus used by StatusWriter to write status.
-func (c *typedClient) PatchStatus(ctx context.Context, obj runtime.Object, patch Patch, opts ...PatchOption) error {
-	o, err := c.cache.getObjMeta(obj)
+// PatchSubResource used by SubResourceWriter to write subresource.
+func (c *typedClient) PatchSubResource(ctx context.Context, obj Object, subResource string, patch Patch, opts ...SubResourcePatchOption) error {
+	o, err := c.resources.getObjMeta(obj)
 	if err != nil {
 		return err
 	}
 
-	data, err := patch.Data(obj)
+	patchOpts := &SubResourcePatchOptions{}
+	patchOpts.ApplyOptions(opts)
+
+	body := obj
+	if patchOpts.SubResourceBody != nil {
+		body = patchOpts.SubResourceBody
+	}
+
+	data, err := patch.Data(body)
 	if err != nil {
 		return err
 	}
 
-	patchOpts := &PatchOptions{}
 	return o.Patch(patch.Type()).
 		NamespaceIfScoped(o.GetNamespace(), o.isNamespaced()).
 		Resource(o.resource()).
 		Name(o.GetName()).
-		SubResource("status").
+		SubResource(subResource).
 		Body(data).
-		VersionedParams(patchOpts.ApplyOptions(opts).AsPatchOptions(), c.paramCodec).
-		Context(ctx).
-		Do().
-		Into(obj)
+		VersionedParams(patchOpts.AsPatchOptions(), c.paramCodec).
+		Do(ctx).
+		Into(body)
 }

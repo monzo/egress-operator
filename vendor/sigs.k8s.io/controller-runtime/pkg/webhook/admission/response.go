@@ -19,29 +19,28 @@ package admission
 import (
 	"net/http"
 
-	"gomodules.xyz/jsonpatch/v2"
-
-	admissionv1beta1 "k8s.io/api/admission/v1beta1"
+	jsonpatch "gomodules.xyz/jsonpatch/v2"
+	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // Allowed constructs a response indicating that the given operation
 // is allowed (without any patches).
-func Allowed(reason string) Response {
-	return ValidationResponse(true, reason)
+func Allowed(message string) Response {
+	return ValidationResponse(true, message)
 }
 
 // Denied constructs a response indicating that the given operation
 // is not allowed.
-func Denied(reason string) Response {
-	return ValidationResponse(false, reason)
+func Denied(message string) Response {
+	return ValidationResponse(false, message)
 }
 
 // Patched constructs a response indicating that the given operation is
 // allowed, and that the target object should be modified by the given
 // JSONPatch operations.
-func Patched(reason string, patches ...jsonpatch.JsonPatchOperation) Response {
-	resp := Allowed(reason)
+func Patched(message string, patches ...jsonpatch.JsonPatchOperation) Response {
+	resp := Allowed(message)
 	resp.Patches = patches
 
 	return resp
@@ -50,7 +49,7 @@ func Patched(reason string, patches ...jsonpatch.JsonPatchOperation) Response {
 // Errored creates a new Response for error-handling a request.
 func Errored(code int32, err error) Response {
 	return Response{
-		AdmissionResponse: admissionv1beta1.AdmissionResponse{
+		AdmissionResponse: admissionv1.AdmissionResponse{
 			Allowed: false,
 			Result: &metav1.Status{
 				Code:    code,
@@ -61,21 +60,24 @@ func Errored(code int32, err error) Response {
 }
 
 // ValidationResponse returns a response for admitting a request.
-func ValidationResponse(allowed bool, reason string) Response {
+func ValidationResponse(allowed bool, message string) Response {
 	code := http.StatusForbidden
+	reason := metav1.StatusReasonForbidden
 	if allowed {
 		code = http.StatusOK
+		reason = ""
 	}
 	resp := Response{
-		AdmissionResponse: admissionv1beta1.AdmissionResponse{
+		AdmissionResponse: admissionv1.AdmissionResponse{
 			Allowed: allowed,
 			Result: &metav1.Status{
-				Code: int32(code),
+				Code:   int32(code),
+				Reason: reason,
 			},
 		},
 	}
-	if len(reason) > 0 {
-		resp.Result.Reason = metav1.StatusReason(reason)
+	if len(message) > 0 {
+		resp.Result.Message = message
 	}
 	return resp
 }
@@ -90,9 +92,33 @@ func PatchResponseFromRaw(original, current []byte) Response {
 	}
 	return Response{
 		Patches: patches,
-		AdmissionResponse: admissionv1beta1.AdmissionResponse{
-			Allowed:   true,
-			PatchType: func() *admissionv1beta1.PatchType { pt := admissionv1beta1.PatchTypeJSONPatch; return &pt }(),
+		AdmissionResponse: admissionv1.AdmissionResponse{
+			Allowed: true,
+			PatchType: func() *admissionv1.PatchType {
+				if len(patches) == 0 {
+					return nil
+				}
+				pt := admissionv1.PatchTypeJSONPatch
+				return &pt
+			}(),
 		},
 	}
+}
+
+// validationResponseFromStatus returns a response for admitting a request with provided Status object.
+func validationResponseFromStatus(allowed bool, status metav1.Status) Response {
+	resp := Response{
+		AdmissionResponse: admissionv1.AdmissionResponse{
+			Allowed: allowed,
+			Result:  &status,
+		},
+	}
+	return resp
+}
+
+// WithWarnings adds the given warnings to the Response.
+// If any warnings were already given, they will not be overwritten.
+func (r Response) WithWarnings(warnings ...string) Response {
+	r.AdmissionResponse.Warnings = append(r.AdmissionResponse.Warnings, warnings...)
+	return r
 }

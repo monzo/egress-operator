@@ -17,6 +17,8 @@ limitations under the License.
 package reconcile
 
 import (
+	"context"
+	"errors"
 	"time"
 
 	"k8s.io/apimachinery/pkg/types"
@@ -30,6 +32,14 @@ type Result struct {
 	// RequeueAfter if greater than 0, tells the Controller to requeue the reconcile key after the Duration.
 	// Implies that Requeue is true, there is no need to set Requeue to true at the same time as RequeueAfter.
 	RequeueAfter time.Duration
+}
+
+// IsZero returns true if this result is empty.
+func (r *Result) IsZero() bool {
+	if r == nil {
+		return true
+	}
+	return *r == Result{}
 }
 
 // Request contains the information necessary to reconcile a Kubernetes object.  This includes the
@@ -52,24 +62,24 @@ Deleting Kubernetes objects) or external Events (GitHub Webhooks, polling extern
 
 Example reconcile Logic:
 
-	* Reader an object and all the Pods it owns.
-	* Observe that the object spec specifies 5 replicas but actual cluster contains only 1 Pod replica.
-	* Create 4 Pods and set their OwnerReferences to the object.
+* Read an object and all the Pods it owns.
+* Observe that the object spec specifies 5 replicas but actual cluster contains only 1 Pod replica.
+* Create 4 Pods and set their OwnerReferences to the object.
 
 reconcile may be implemented as either a type:
 
-	type reconcile struct {}
+	type reconciler struct {}
 
-	func (reconcile) reconcile(controller.Request) (controller.Result, error) {
+	func (reconciler) Reconcile(ctx context.Context, o reconcile.Request) (reconcile.Result, error) {
 		// Implement business logic of reading and writing objects here
-		return controller.Result{}, nil
+		return reconcile.Result{}, nil
 	}
 
 Or as a function:
 
-	controller.Func(func(o controller.Request) (controller.Result, error) {
+	reconcile.Func(func(ctx context.Context, o reconcile.Request) (reconcile.Result, error) {
 		// Implement business logic of reading and writing objects here
-		return controller.Result{}, nil
+		return reconcile.Result{}, nil
 	})
 
 Reconciliation is level-based, meaning action isn't driven off changes in individual Events, but instead is
@@ -78,16 +88,39 @@ For example if responding to a Pod Delete Event, the Request won't contain that 
 instead the reconcile function observes this when reading the cluster state and seeing the Pod as missing.
 */
 type Reconciler interface {
-	// Reconciler performs a full reconciliation for the object referred to by the Request.
+	// Reconcile performs a full reconciliation for the object referred to by the Request.
 	// The Controller will requeue the Request to be processed again if an error is non-nil or
 	// Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
-	Reconcile(Request) (Result, error)
+	Reconcile(context.Context, Request) (Result, error)
 }
 
 // Func is a function that implements the reconcile interface.
-type Func func(Request) (Result, error)
+type Func func(context.Context, Request) (Result, error)
 
 var _ Reconciler = Func(nil)
 
 // Reconcile implements Reconciler.
-func (r Func) Reconcile(o Request) (Result, error) { return r(o) }
+func (r Func) Reconcile(ctx context.Context, o Request) (Result, error) { return r(ctx, o) }
+
+// TerminalError is an error that will not be retried but still be logged
+// and recorded in metrics.
+func TerminalError(wrapped error) error {
+	return &terminalError{err: wrapped}
+}
+
+type terminalError struct {
+	err error
+}
+
+func (te *terminalError) Unwrap() error {
+	return te.err
+}
+
+func (te *terminalError) Error() string {
+	return "terminal error: " + te.err.Error()
+}
+
+func (te *terminalError) Is(target error) bool {
+	tp := &terminalError{}
+	return errors.As(target, &tp)
+}

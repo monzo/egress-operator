@@ -17,6 +17,8 @@ limitations under the License.
 package handler
 
 import (
+	"context"
+
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -26,6 +28,8 @@ import (
 
 var enqueueLog = logf.RuntimeLog.WithName("eventhandler").WithName("EnqueueRequestForObject")
 
+type empty struct{}
+
 var _ EventHandler = &EnqueueRequestForObject{}
 
 // EnqueueRequestForObject enqueues a Request containing the Name and Namespace of the object that is the source of the Event.
@@ -33,59 +37,56 @@ var _ EventHandler = &EnqueueRequestForObject{}
 // Controllers that have associated Resources (e.g. CRDs) to reconcile the associated Resource.
 type EnqueueRequestForObject struct{}
 
-// Create implements EventHandler
-func (e *EnqueueRequestForObject) Create(evt event.CreateEvent, q workqueue.RateLimitingInterface) {
-	if evt.Meta == nil {
+// Create implements EventHandler.
+func (e *EnqueueRequestForObject) Create(ctx context.Context, evt event.CreateEvent, q workqueue.RateLimitingInterface) {
+	if evt.Object == nil {
 		enqueueLog.Error(nil, "CreateEvent received with no metadata", "event", evt)
 		return
 	}
 	q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
-		Name:      evt.Meta.GetName(),
-		Namespace: evt.Meta.GetNamespace(),
+		Name:      evt.Object.GetName(),
+		Namespace: evt.Object.GetNamespace(),
 	}})
 }
 
-// Update implements EventHandler
-func (e *EnqueueRequestForObject) Update(evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
-	if evt.MetaOld != nil {
+// Update implements EventHandler.
+func (e *EnqueueRequestForObject) Update(ctx context.Context, evt event.UpdateEvent, q workqueue.RateLimitingInterface) {
+	switch {
+	case evt.ObjectNew != nil:
 		q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
-			Name:      evt.MetaOld.GetName(),
-			Namespace: evt.MetaOld.GetNamespace(),
+			Name:      evt.ObjectNew.GetName(),
+			Namespace: evt.ObjectNew.GetNamespace(),
 		}})
-	} else {
-		enqueueLog.Error(nil, "UpdateEvent received with no old metadata", "event", evt)
-	}
-
-	if evt.MetaNew != nil {
+	case evt.ObjectOld != nil:
 		q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
-			Name:      evt.MetaNew.GetName(),
-			Namespace: evt.MetaNew.GetNamespace(),
+			Name:      evt.ObjectOld.GetName(),
+			Namespace: evt.ObjectOld.GetNamespace(),
 		}})
-	} else {
-		enqueueLog.Error(nil, "UpdateEvent received with no new metadata", "event", evt)
+	default:
+		enqueueLog.Error(nil, "UpdateEvent received with no metadata", "event", evt)
 	}
 }
 
-// Delete implements EventHandler
-func (e *EnqueueRequestForObject) Delete(evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
-	if evt.Meta == nil {
+// Delete implements EventHandler.
+func (e *EnqueueRequestForObject) Delete(ctx context.Context, evt event.DeleteEvent, q workqueue.RateLimitingInterface) {
+	if evt.Object == nil {
 		enqueueLog.Error(nil, "DeleteEvent received with no metadata", "event", evt)
 		return
 	}
 	q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
-		Name:      evt.Meta.GetName(),
-		Namespace: evt.Meta.GetNamespace(),
+		Name:      evt.Object.GetName(),
+		Namespace: evt.Object.GetNamespace(),
 	}})
 }
 
-// Generic implements EventHandler
-func (e *EnqueueRequestForObject) Generic(evt event.GenericEvent, q workqueue.RateLimitingInterface) {
-	if evt.Meta == nil {
+// Generic implements EventHandler.
+func (e *EnqueueRequestForObject) Generic(ctx context.Context, evt event.GenericEvent, q workqueue.RateLimitingInterface) {
+	if evt.Object == nil {
 		enqueueLog.Error(nil, "GenericEvent received with no metadata", "event", evt)
 		return
 	}
 	q.Add(reconcile.Request{NamespacedName: types.NamespacedName{
-		Name:      evt.Meta.GetName(),
-		Namespace: evt.Meta.GetNamespace(),
+		Name:      evt.Object.GetName(),
+		Namespace: evt.Object.GetNamespace(),
 	}})
 }
