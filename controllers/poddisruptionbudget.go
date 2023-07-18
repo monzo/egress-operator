@@ -4,7 +4,7 @@ import (
 	"context"
 
 	egressv1 "github.com/monzo/egress-operator/api/v1"
-	policyv1beta1 "k8s.io/api/policy/v1beta1"
+	policyv1 "k8s.io/api/policy/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -18,7 +18,7 @@ func (r *ExternalServiceReconciler) reconcilePodDisruptionBudget(ctx context.Con
 		return err
 	}
 
-	pdb := &policyv1beta1.PodDisruptionBudget{}
+	pdb := &policyv1.PodDisruptionBudget{}
 	if err := r.Get(ctx, req.NamespacedName, pdb); err != nil {
 		if apierrs.IsNotFound(err) {
 			return r.Client.Create(ctx, desired)
@@ -34,15 +34,15 @@ func (r *ExternalServiceReconciler) reconcilePodDisruptionBudget(ctx context.Con
 	return ignoreNotFound(r.patchIfNecessary(ctx, patched, client.MergeFrom(pdb)))
 }
 
-func pdb(es *egressv1.ExternalService) *policyv1beta1.PodDisruptionBudget {
-	return &policyv1beta1.PodDisruptionBudget{
+func pdb(es *egressv1.ExternalService) *policyv1.PodDisruptionBudget {
+	return &policyv1.PodDisruptionBudget{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        es.Name,
 			Namespace:   namespace,
 			Labels:      labels(es),
 			Annotations: annotations(es),
 		},
-		Spec: policyv1beta1.PodDisruptionBudgetSpec{
+		Spec: policyv1.PodDisruptionBudgetSpec{
 			Selector: &metav1.LabelSelector{
 				MatchLabels: labels(es),
 			},
