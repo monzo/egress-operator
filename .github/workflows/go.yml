@@ -7,10 +7,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-    - name: Set up Go 1.18
+    - name: Set up Go 1.20
       uses: actions/setup-go@v1
       with:
-        go-version: 1.18
+        go-version: 1.20
       id: go
 
     - name: Check out code into the Go module directory
@@ -19,8 +19,9 @@ jobs:
     - name: Get dependencies
       run: |
         go mod download
-        curl -sL https://github.com/kubernetes-sigs/kubebuilder/releases/download/v2.2.0/kubebuilder_2.2.0_linux_amd64.tar.gz | tar -xz -C /tmp/
-        sudo mv /tmp/kubebuilder_2.2.0_linux_amd64 /usr/local/kubebuilder
+        curl -L -o /tmp/kubebuilder https://github.com/kubernetes-sigs/kubebuilder/releases/download/v3.11.1/kubebuilder_linux_amd64
+        sudo mv /tmp/kubebuilder /usr/local/kubebuilder
+        
         
         cd coredns-plugin && go get -v -t -d ./...
 
@@ -31,4 +32,13 @@ jobs:
       run: cd coredns-plugin && go build -o coredns ./cmd
 
     - name: Test
-      run: go test ./... -ginkgo.v -v
+      run: |
+        # make sure Go binaries are in PATH
+        export PATH=${PATH}:$(go env GOPATH)/bin
+        
+        # install K8s testing components (apiserver etc)
+        go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+        
+
+        # populate KUBEBUILDER_ASSETS env var
+        KUBEBUILDER_ASSETS=$(setup-envtest use -p path) go test ./... -ginkgo.v -v

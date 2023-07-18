@@ -148,7 +148,7 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 							// Copying istio; don't try drain outbound listeners, but after going into terminating state,
 							// wait 25 seconds for connections to naturally close before going ahead with stop.
 							Lifecycle: &corev1.Lifecycle{
-								PreStop: &corev1.Handler{
+								PreStop: &corev1.LifecycleHandler{
 									Exec: &corev1.ExecAction{
 										Command: []string{"/bin/sleep", "25"},
 									},
@@ -157,7 +157,7 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 							TerminationMessagePath:   corev1.TerminationMessagePathDefault,
 							TerminationMessagePolicy: corev1.TerminationMessageReadFile,
 							ReadinessProbe: &corev1.Probe{
-								Handler: corev1.Handler{
+								ProbeHandler: corev1.ProbeHandler{
 									HTTPGet: &corev1.HTTPGetAction{
 										Path:   "/ready",
 										Port:   intstr.FromInt(int(adPort)),

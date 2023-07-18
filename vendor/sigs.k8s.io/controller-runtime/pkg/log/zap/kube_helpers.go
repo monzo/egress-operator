@@ -18,12 +18,12 @@ package zap
 
 import (
 	"fmt"
+	"reflect"
 
 	"go.uber.org/zap/buffer"
 	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 )
 
 // KubeAwareEncoder is a Kubernetes-aware Zap Encoder.
@@ -40,32 +40,21 @@ type KubeAwareEncoder struct {
 	Verbose bool
 }
 
-// namespacedNameWrapper is a zapcore.ObjectMarshaler for Kubernetes NamespacedName
-type namespacedNameWrapper struct {
-	types.NamespacedName
-}
-
-func (w namespacedNameWrapper) MarshalLogObject(enc zapcore.ObjectEncoder) error {
-	if w.Namespace != "" {
-		enc.AddString("namespace", w.Namespace)
-	}
-
-	enc.AddString("name", w.Name)
-
-	return nil
-}
-
 // kubeObjectWrapper is a zapcore.ObjectMarshaler for Kubernetes objects.
 type kubeObjectWrapper struct {
 	obj runtime.Object
 }
 
-// MarshalLogObject implements zapcore.ObjectMarshaler
+// MarshalLogObject implements zapcore.ObjectMarshaler.
 func (w kubeObjectWrapper) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	// TODO(directxman12): log kind and apiversion if not set explicitly (common case)
 	// -- needs an a scheme to convert to the GVK.
-	gvk := w.obj.GetObjectKind().GroupVersionKind()
-	if gvk.Version != "" {
+
+	if reflect.ValueOf(w.obj).IsNil() {
+		return fmt.Errorf("got nil for runtime.Object")
+	}
+
+	if gvk := w.obj.GetObjectKind().GroupVersionKind(); gvk.Version != "" {
 		enc.AddString("apiVersion", gvk.GroupVersion().String())
 		enc.AddString("kind", gvk.Kind)
 	}
@@ -75,8 +64,7 @@ func (w kubeObjectWrapper) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 		return fmt.Errorf("got runtime.Object without object metadata: %v", w.obj)
 	}
 
-	ns := objMeta.GetNamespace()
-	if ns != "" {
+	if ns := objMeta.GetNamespace(); ns != "" {
 		enc.AddString("namespace", ns)
 	}
 	enc.AddString("name", objMeta.GetName())
@@ -86,14 +74,14 @@ func (w kubeObjectWrapper) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 
 // NB(directxman12): can't just override AddReflected, since the encoder calls AddReflected on itself directly
 
-// Clone implements zapcore.Encoder
+// Clone implements zapcore.Encoder.
 func (k *KubeAwareEncoder) Clone() zapcore.Encoder {
 	return &KubeAwareEncoder{
 		Encoder: k.Encoder.Clone(),
 	}
 }
 
-// EncodeEntry implements zapcore.Encoder
+// EncodeEntry implements zapcore.Encoder.
 func (k *KubeAwareEncoder) EncodeEntry(entry zapcore.Entry, fields []zapcore.Field) (*buffer.Buffer, error) {
 	if k.Verbose {
 		// Kubernetes objects implement fmt.Stringer, so if we
@@ -105,19 +93,15 @@ func (k *KubeAwareEncoder) EncodeEntry(entry zapcore.Entry, fields []zapcore.Fie
 		// intercept stringer fields that happen to be Kubernetes runtime.Object or
 		// types.NamespacedName values (Kubernetes runtime.Objects commonly
 		// implement String, apparently).
-		if field.Type == zapcore.StringerType {
+		// *unstructured.Unstructured does NOT implement fmt.Striger interface.
+		// We have handle it specially.
+		if field.Type == zapcore.StringerType || field.Type == zapcore.ReflectType {
 			switch val := field.Interface.(type) {
 			case runtime.Object:
 				fields[i] = zapcore.Field{
 					Type:      zapcore.ObjectMarshalerType,
 					Key:       field.Key,
 					Interface: kubeObjectWrapper{obj: val},
-				}
-			case types.NamespacedName:
-				fields[i] = zapcore.Field{
-					Type:      zapcore.ObjectMarshalerType,
-					Key:       field.Key,
-					Interface: namespacedNameWrapper{NamespacedName: val},
 				}
 			}
 		}

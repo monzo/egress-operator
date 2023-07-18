@@ -8,13 +8,14 @@ import (
 	v1 "github.com/monzo/egress-operator/api/v1"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	. "github.com/onsi/gomega/types"
+	gomegatypes "github.com/onsi/gomega/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -74,7 +75,7 @@ var _ = Describe("ExternalService Controller", func() {
 				obj.SetName(key.Name)
 				obj.SetNamespace(key.Namespace)
 
-				Expect(k8sClient.Delete(context.Background(), obj.(runtime.Object))).Should(Succeed())
+				Expect(k8sClient.Delete(context.Background(), obj.(client.Object))).Should(Succeed())
 
 				assertState(key, current)
 			}
@@ -87,11 +88,11 @@ var _ = Describe("ExternalService Controller", func() {
 			for _, obj := range [...]metav1.Object{&appsv1.Deployment{}, &networkingv1.NetworkPolicy{}, &corev1.Service{},
 				&corev1.ConfigMap{}, &autoscalingv1.HorizontalPodAutoscaler{}} {
 
-				Expect(k8sClient.Get(context.Background(), key, obj.(runtime.Object))).Should(Succeed())
+				Expect(k8sClient.Get(context.Background(), key, obj.(client.Object))).Should(Succeed())
 
 				obj.GetLabels()["app"] = "foo"
 
-				Expect(k8sClient.Update(context.Background(), obj.(runtime.Object))).Should(Succeed())
+				Expect(k8sClient.Update(context.Background(), obj.(client.Object))).Should(Succeed())
 
 				assertState(key, current)
 			}
@@ -99,7 +100,7 @@ var _ = Describe("ExternalService Controller", func() {
 	})
 })
 
-func assertOwner(name string) GomegaMatcher {
+func assertOwner(name string) gomegatypes.GomegaMatcher {
 	return WithTransform(func(obj metav1.Object) []metav1.OwnerReference { return obj.GetOwnerReferences() },
 		And(
 			HaveLen(1),
@@ -108,7 +109,7 @@ func assertOwner(name string) GomegaMatcher {
 		))
 }
 
-func mapContainsMap(mustContain map[string]string) GomegaMatcher {
+func mapContainsMap(mustContain map[string]string) gomegatypes.GomegaMatcher {
 	return WithTransform(func(m map[string]string) bool {
 		for k, v := range mustContain {
 			if otherV, ok := m[k]; !ok || otherV != v {
@@ -120,7 +121,7 @@ func mapContainsMap(mustContain map[string]string) GomegaMatcher {
 	}, BeTrue())
 }
 
-func assertLabels(target metav1.Object) GomegaMatcher {
+func assertLabels(target metav1.Object) gomegatypes.GomegaMatcher {
 	return WithTransform(func(obj metav1.Object) [2]map[string]string {
 		return [2]map[string]string{obj.GetLabels(), obj.GetAnnotations()}
 	},
@@ -145,7 +146,7 @@ func assertState(key types.NamespacedName, es *v1.ExternalService) {
 
 		return d
 	}, timeout, interval).Should(And(
-		WithTransform(func(d *appsv1.Deployment) appsv1.DeploymentSpec { return d.Spec }, Equal(deployment(es, cHash).Spec)),
+		WithTransform(func(d *appsv1.Deployment) appsv1.DeploymentSpec { return d.Spec }, BeComparableTo(deployment(es, cHash).Spec)),
 		assertOwner(key.Name),
 		assertLabels(deployment(es, cHash)),
 	))
@@ -156,7 +157,7 @@ func assertState(key types.NamespacedName, es *v1.ExternalService) {
 
 		return n
 	}, timeout, interval).Should(And(
-		WithTransform(func(d *networkingv1.NetworkPolicy) networkingv1.NetworkPolicySpec { return d.Spec }, Equal(networkPolicy(es).Spec)),
+		WithTransform(func(d *networkingv1.NetworkPolicy) networkingv1.NetworkPolicySpec { return d.Spec }, BeComparableTo(networkPolicy(es).Spec)),
 		assertOwner(key.Name),
 		assertLabels(networkPolicy(es)),
 	))
@@ -165,10 +166,14 @@ func assertState(key types.NamespacedName, es *v1.ExternalService) {
 		s := &corev1.Service{}
 		_ = k8sClient.Get(context.Background(), key, s)
 		s.Spec.ClusterIP = ""
+		s.Spec.ClusterIPs = nil
+		s.Spec.IPFamilies = nil
+		s.Spec.IPFamilyPolicy = nil
+		s.Spec.InternalTrafficPolicy = nil
 
 		return s
 	}, timeout, interval).Should(And(
-		WithTransform(func(d *corev1.Service) corev1.ServiceSpec { return d.Spec }, Equal(service(es, true, nil).Spec)),
+		WithTransform(func(d *corev1.Service) corev1.ServiceSpec { return d.Spec }, BeComparableTo(service(es, true, nil).Spec)),
 		assertOwner(key.Name),
 		assertLabels(service(es, true, nil)),
 	))
@@ -179,7 +184,7 @@ func assertState(key types.NamespacedName, es *v1.ExternalService) {
 
 		return c
 	}, timeout, interval).Should(And(
-		WithTransform(func(d *corev1.ConfigMap) map[string]string { return d.Data }, Equal(cTarget.Data)),
+		WithTransform(func(d *corev1.ConfigMap) map[string]string { return d.Data }, BeComparableTo(cTarget.Data)),
 		assertOwner(key.Name),
 		assertLabels(cTarget),
 	))

@@ -19,3 +19,9 @@
 
 # Vscode files
 .vscode
+
+# Tools binaries.
+hack/tools/bin
+
+junit-report.xml
+/artifacts

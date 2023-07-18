@@ -17,24 +17,51 @@ limitations under the License.
 package controller
 
 import (
+	"context"
 	"fmt"
+	"time"
 
+	"github.com/go-logr/logr"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/klog/v2"
+
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/internal/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/ratelimiter"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-// Options are the arguments for creating a new Controller
+// Options are the arguments for creating a new Controller.
 type Options struct {
 	// MaxConcurrentReconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 1.
 	MaxConcurrentReconciles int
 
+	// CacheSyncTimeout refers to the time limit set to wait for syncing caches.
+	// Defaults to 2 minutes if not set.
+	CacheSyncTimeout time.Duration
+
+	// RecoverPanic indicates whether the panic caused by reconcile should be recovered.
+	// Defaults to the Controller.RecoverPanic setting from the Manager if unset.
+	RecoverPanic *bool
+
+	// NeedLeaderElection indicates whether the controller needs to use leader election.
+	// Defaults to true, which means the controller will use leader election.
+	NeedLeaderElection *bool
+
 	// Reconciler reconciles an object
 	Reconciler reconcile.Reconciler
+
+	// RateLimiter is used to limit how frequently requests may be queued.
+	// Defaults to MaxOfRateLimiter which has both overall and per-item rate limiting.
+	// The overall is a token bucket and the per-item is exponential.
+	RateLimiter ratelimiter.RateLimiter
+
+	// LogConstructor is used to construct a logger used for this controller and passed
+	// to each reconciliation via the context field.
+	LogConstructor func(request *reconcile.Request) logr.Logger
 }
 
 // Controller implements a Kubernetes API.  A Controller manages a work queue fed reconcile.Requests
@@ -53,14 +80,29 @@ type Controller interface {
 	// EventHandler if all provided Predicates evaluate to true.
 	Watch(src source.Source, eventhandler handler.EventHandler, predicates ...predicate.Predicate) error
 
-	// Start starts the controller.  Start blocks until stop is closed or a
+	// Start starts the controller.  Start blocks until the context is closed or a
 	// controller has an error starting.
-	Start(stop <-chan struct{}) error
+	Start(ctx context.Context) error
+
+	// GetLogger returns this controller logger prefilled with basic information.
+	GetLogger() logr.Logger
 }
 
 // New returns a new Controller registered with the Manager.  The Manager will ensure that shared Caches have
 // been synced before the Controller is Started.
 func New(name string, mgr manager.Manager, options Options) (Controller, error) {
+	c, err := NewUnmanaged(name, mgr, options)
+	if err != nil {
+		return nil, err
+	}
+
+	// Add the controller as a Manager components
+	return c, mgr.Add(c)
+}
+
+// NewUnmanaged returns a new controller without adding it to the manager. The
+// caller is responsible for starting the returned controller.
+func NewUnmanaged(name string, mgr manager.Manager, options Options) (Controller, error) {
 	if options.Reconciler == nil {
 		return nil, fmt.Errorf("must specify Reconciler")
 	}
@@ -69,30 +111,64 @@ func New(name string, mgr manager.Manager, options Options) (Controller, error) 
 		return nil, fmt.Errorf("must specify Name for Controller")
 	}
 
-	if options.MaxConcurrentReconciles <= 0 {
-		options.MaxConcurrentReconciles = 1
+	if options.LogConstructor == nil {
+		log := mgr.GetLogger().WithValues(
+			"controller", name,
+		)
+		options.LogConstructor = func(req *reconcile.Request) logr.Logger {
+			log := log
+			if req != nil {
+				log = log.WithValues(
+					"object", klog.KRef(req.Namespace, req.Name),
+					"namespace", req.Namespace, "name", req.Name,
+				)
+			}
+			return log
+		}
 	}
 
-	// Inject dependencies into Reconciler
-	if err := mgr.SetFields(options.Reconciler); err != nil {
-		return nil, err
+	if options.MaxConcurrentReconciles <= 0 {
+		if mgr.GetControllerOptions().MaxConcurrentReconciles > 0 {
+			options.MaxConcurrentReconciles = mgr.GetControllerOptions().MaxConcurrentReconciles
+		} else {
+			options.MaxConcurrentReconciles = 1
+		}
+	}
+
+	if options.CacheSyncTimeout == 0 {
+		if mgr.GetControllerOptions().CacheSyncTimeout != 0 {
+			options.CacheSyncTimeout = mgr.GetControllerOptions().CacheSyncTimeout
+		} else {
+			options.CacheSyncTimeout = 2 * time.Minute
+		}
+	}
+
+	if options.RateLimiter == nil {
+		options.RateLimiter = workqueue.DefaultControllerRateLimiter()
+	}
+
+	if options.RecoverPanic == nil {
+		options.RecoverPanic = mgr.GetControllerOptions().RecoverPanic
+	}
+
+	if options.NeedLeaderElection == nil {
+		options.NeedLeaderElection = mgr.GetControllerOptions().NeedLeaderElection
 	}
 
 	// Create controller with dependencies set
-	c := &controller.Controller{
-		Do:       options.Reconciler,
-		Cache:    mgr.GetCache(),
-		Config:   mgr.GetConfig(),
-		Scheme:   mgr.GetScheme(),
-		Client:   mgr.GetClient(),
-		Recorder: mgr.GetEventRecorderFor(name),
+	return &controller.Controller{
+		Do: options.Reconciler,
 		MakeQueue: func() workqueue.RateLimitingInterface {
-			return workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), name)
+			return workqueue.NewNamedRateLimitingQueue(options.RateLimiter, name)
 		},
 		MaxConcurrentReconciles: options.MaxConcurrentReconciles,
+		CacheSyncTimeout:        options.CacheSyncTimeout,
 		Name:                    name,
-	}
-
-	// Add the controller as a Manager components
-	return c, mgr.Add(c)
+		LogConstructor:          options.LogConstructor,
+		RecoverPanic:            options.RecoverPanic,
+		LeaderElected:           options.NeedLeaderElection,
+	}, nil
 }
+
+// ReconcileIDFromContext gets the reconcileID from the current context.
+var ReconcileIDFromContext = controller.ReconcileIDFromContext

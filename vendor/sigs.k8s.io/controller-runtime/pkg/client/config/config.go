@@ -20,6 +20,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/user"
+	"path/filepath"
 
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -27,20 +29,32 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/internal/log"
 )
 
+// KubeconfigFlagName is the name of the kubeconfig flag
+const KubeconfigFlagName = "kubeconfig"
+
 var (
-	kubeconfig, apiServerURL string
-	log                      = logf.RuntimeLog.WithName("client").WithName("config")
+	kubeconfig string
+	log        = logf.RuntimeLog.WithName("client").WithName("config")
 )
 
+// init registers the "kubeconfig" flag to the default command line FlagSet.
+// TODO: This should be removed, as it potentially leads to redefined flag errors for users, if they already
+// have registered the "kubeconfig" flag to the command line FlagSet in other parts of their code.
 func init() {
-	// TODO: Fix this to allow double vendoring this library but still register flags on behalf of users
-	flag.StringVar(&kubeconfig, "kubeconfig", "",
-		"Paths to a kubeconfig. Only required if out-of-cluster.")
+	RegisterFlags(flag.CommandLine)
+}
 
-	// This flag is deprecated, it'll be removed in a future iteration, please switch to --kubeconfig.
-	flag.StringVar(&apiServerURL, "master", "",
-		"(Deprecated: switch to `--kubeconfig`) The address of the Kubernetes API server. Overrides any value in kubeconfig. "+
-			"Only required if out-of-cluster.")
+// RegisterFlags registers flag variables to the given FlagSet if not already registered.
+// It uses the default command line FlagSet, if none is provided. Currently, it only registers the kubeconfig flag.
+func RegisterFlags(fs *flag.FlagSet) {
+	if fs == nil {
+		fs = flag.CommandLine
+	}
+	if f := fs.Lookup(KubeconfigFlagName); f != nil {
+		kubeconfig = f.Value.String()
+	} else {
+		fs.StringVar(&kubeconfig, KubeconfigFlagName, "", "Paths to a kubeconfig. Only required if out-of-cluster.")
+	}
 }
 
 // GetConfig creates a *rest.Config for talking to a Kubernetes API server.
@@ -50,7 +64,7 @@ func init() {
 // It also applies saner defaults for QPS and burst based on the Kubernetes
 // controller manager defaults (20 QPS, 30 burst)
 //
-// Config precedence
+// Config precedence:
 //
 // * --kubeconfig flag pointing at a file
 //
@@ -58,7 +72,7 @@ func init() {
 //
 // * In-cluster config if running in cluster
 //
-// * $HOME/.kube/config if exists
+// * $HOME/.kube/config if exists.
 func GetConfig() (*rest.Config, error) {
 	return GetConfigWithContext("")
 }
@@ -70,7 +84,7 @@ func GetConfig() (*rest.Config, error) {
 // It also applies saner defaults for QPS and burst based on the Kubernetes
 // controller manager defaults (20 QPS, 30 burst)
 //
-// Config precedence
+// Config precedence:
 //
 // * --kubeconfig flag pointing at a file
 //
@@ -78,18 +92,18 @@ func GetConfig() (*rest.Config, error) {
 //
 // * In-cluster config if running in cluster
 //
-// * $HOME/.kube/config if exists
+// * $HOME/.kube/config if exists.
 func GetConfigWithContext(context string) (*rest.Config, error) {
 	cfg, err := loadConfig(context)
 	if err != nil {
 		return nil, err
 	}
-
 	if cfg.QPS == 0.0 {
 		cfg.QPS = 20.0
-		cfg.Burst = 30.0
 	}
-
+	if cfg.Burst == 0 {
+		cfg.Burst = 30
+	}
 	return cfg, nil
 }
 
@@ -98,30 +112,47 @@ func GetConfigWithContext(context string) (*rest.Config, error) {
 // test the precedence of loading the config.
 var loadInClusterConfig = rest.InClusterConfig
 
-// loadConfig loads a REST Config as per the rules specified in GetConfig
-func loadConfig(context string) (*rest.Config, error) {
-
+// loadConfig loads a REST Config as per the rules specified in GetConfig.
+func loadConfig(context string) (config *rest.Config, configErr error) {
 	// If a flag is specified with the config location, use that
 	if len(kubeconfig) > 0 {
-		return loadConfigWithContext(apiServerURL, &clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfig}, context)
+		return loadConfigWithContext("", &clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfig}, context)
 	}
 
 	// If the recommended kubeconfig env variable is not specified,
 	// try the in-cluster config.
 	kubeconfigPath := os.Getenv(clientcmd.RecommendedConfigPathEnvVar)
 	if len(kubeconfigPath) == 0 {
-		if c, err := loadInClusterConfig(); err == nil {
+		c, err := loadInClusterConfig()
+		if err == nil {
 			return c, nil
 		}
+
+		defer func() {
+			if configErr != nil {
+				log.Error(err, "unable to load in-cluster config")
+			}
+		}()
 	}
 
 	// If the recommended kubeconfig env variable is set, or there
 	// is no in-cluster config, try the default recommended locations.
-	if c, err := loadConfigWithContext(apiServerURL, clientcmd.NewDefaultClientConfigLoadingRules(), context); err == nil {
-		return c, nil
+	//
+	// NOTE: For default config file locations, upstream only checks
+	// $HOME for the user's home directory, but we can also try
+	// os/user.HomeDir when $HOME is unset.
+	//
+	// TODO(jlanford): could this be done upstream?
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	if _, ok := os.LookupEnv("HOME"); !ok {
+		u, err := user.Current()
+		if err != nil {
+			return nil, fmt.Errorf("could not get current user: %w", err)
+		}
+		loadingRules.Precedence = append(loadingRules.Precedence, filepath.Join(u.HomeDir, clientcmd.RecommendedHomeDir, clientcmd.RecommendedFileName))
 	}
 
-	return nil, fmt.Errorf("could not locate a kubeconfig")
+	return loadConfigWithContext("", loadingRules, context)
 }
 
 func loadConfigWithContext(apiServerURL string, loader clientcmd.ClientConfigLoader, context string) (*rest.Config, error) {

@@ -26,7 +26,7 @@ import (
 	"fmt"
 	"net/http"
 
-	apix "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	apix "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -39,32 +39,30 @@ var (
 	log = logf.Log.WithName("conversion-webhook")
 )
 
-// Webhook implements a CRD conversion webhook HTTP handler.
-type Webhook struct {
+func NewWebhookHandler(scheme *runtime.Scheme) http.Handler {
+	return &webhook{scheme: scheme, decoder: NewDecoder(scheme)}
+}
+
+// webhook implements a CRD conversion webhook HTTP handler.
+type webhook struct {
 	scheme  *runtime.Scheme
 	decoder *Decoder
 }
 
-// InjectScheme injects a scheme into the webhook, in order to construct a Decoder.
-func (wh *Webhook) InjectScheme(s *runtime.Scheme) error {
-	var err error
-	wh.scheme = s
-	wh.decoder, err = NewDecoder(s)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // ensure Webhook implements http.Handler
-var _ http.Handler = &Webhook{}
+var _ http.Handler = &webhook{}
 
-func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (wh *webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	convertReview := &apix.ConversionReview{}
 	err := json.NewDecoder(r.Body).Decode(convertReview)
 	if err != nil {
 		log.Error(err, "failed to read conversion request")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if convertReview.Request == nil {
+		log.Error(nil, "conversion request is nil")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -89,7 +87,7 @@ func (wh *Webhook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // handles a version conversion request.
-func (wh *Webhook) handleConvertRequest(req *apix.ConversionRequest) (*apix.ConversionResponse, error) {
+func (wh *webhook) handleConvertRequest(req *apix.ConversionRequest) (*apix.ConversionResponse, error) {
 	if req == nil {
 		return nil, fmt.Errorf("conversion request is nil")
 	}
@@ -122,7 +120,7 @@ func (wh *Webhook) handleConvertRequest(req *apix.ConversionRequest) (*apix.Conv
 // convertObject will convert given a src object to dst object.
 // Note(droot): couldn't find a way to reduce the cyclomatic complexity under 10
 // without compromising readability, so disabling gocyclo linter
-func (wh *Webhook) convertObject(src, dst runtime.Object) error {
+func (wh *webhook) convertObject(src, dst runtime.Object) error {
 	srcGVK := src.GetObjectKind().GroupVersionKind()
 	dstGVK := dst.GetObjectKind().GroupVersionKind()
 
@@ -149,7 +147,7 @@ func (wh *Webhook) convertObject(src, dst runtime.Object) error {
 	}
 }
 
-func (wh *Webhook) convertViaHub(src, dst conversion.Convertible) error {
+func (wh *webhook) convertViaHub(src, dst conversion.Convertible) error {
 	hub, err := wh.getHub(src)
 	if err != nil {
 		return err
@@ -161,19 +159,19 @@ func (wh *Webhook) convertViaHub(src, dst conversion.Convertible) error {
 
 	err = src.ConvertTo(hub)
 	if err != nil {
-		return fmt.Errorf("%T failed to convert to hub version %T : %v", src, hub, err)
+		return fmt.Errorf("%T failed to convert to hub version %T : %w", src, hub, err)
 	}
 
 	err = dst.ConvertFrom(hub)
 	if err != nil {
-		return fmt.Errorf("%T failed to convert from hub version %T : %v", dst, hub, err)
+		return fmt.Errorf("%T failed to convert from hub version %T : %w", dst, hub, err)
 	}
 
 	return nil
 }
 
 // getHub returns an instance of the Hub for passed-in object's group/kind.
-func (wh *Webhook) getHub(obj runtime.Object) (conversion.Hub, error) {
+func (wh *webhook) getHub(obj runtime.Object) (conversion.Hub, error) {
 	gvks, err := objectGVKs(wh.scheme, obj)
 	if err != nil {
 		return nil, err
@@ -187,7 +185,7 @@ func (wh *Webhook) getHub(obj runtime.Object) (conversion.Hub, error) {
 	for _, gvk := range gvks {
 		instance, err := wh.scheme.New(gvk)
 		if err != nil {
-			return nil, fmt.Errorf("failed to allocate an instance for gvk %v %v", gvk, err)
+			return nil, fmt.Errorf("failed to allocate an instance for gvk %v: %w", gvk, err)
 		}
 		if val, isHub := instance.(conversion.Hub); isHub {
 			if hubFoundAlready {
@@ -201,7 +199,7 @@ func (wh *Webhook) getHub(obj runtime.Object) (conversion.Hub, error) {
 }
 
 // allocateDstObject returns an instance for a given GVK.
-func (wh *Webhook) allocateDstObject(apiVersion, kind string) (runtime.Object, error) {
+func (wh *webhook) allocateDstObject(apiVersion, kind string) (runtime.Object, error) {
 	gvk := schema.FromAPIVersionAndKind(apiVersion, kind)
 
 	obj, err := wh.scheme.New(gvk)
@@ -237,7 +235,7 @@ func IsConvertible(scheme *runtime.Scheme, obj runtime.Object) (bool, error) {
 	for _, gvk := range gvks {
 		instance, err := scheme.New(gvk)
 		if err != nil {
-			return false, fmt.Errorf("failed to allocate an instance for gvk %v %v", gvk, err)
+			return false, fmt.Errorf("failed to allocate an instance for gvk %v: %w", gvk, err)
 		}
 
 		if isHub(instance) {
@@ -264,10 +262,6 @@ func IsConvertible(scheme *runtime.Scheme, obj runtime.Object) (bool, error) {
 	}
 
 	if len(hubs) == 1 && len(nonSpokes) == 0 { // convertible
-		spokeVersions := []string{}
-		for _, sp := range spokes {
-			spokeVersions = append(spokeVersions, sp.GetObjectKind().GroupVersionKind().String())
-		}
 		return true, nil
 	}
 

@@ -43,8 +43,7 @@ type ExternalServiceReconciler struct {
 // +kubebuilder:rbac:groups=egress.monzo.com,resources=externalservices,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=egress.monzo.com,resources=externalservices/status,verbs=get;update;patch
 
-func (r *ExternalServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
+func (r *ExternalServiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("externalservice", req.NamespacedName)
 
 	es := &egressv1.ExternalService{}
@@ -129,7 +128,7 @@ func ignoreNotFound(err error) error {
 
 var emptyPatch = []byte("{}")
 
-func (r *ExternalServiceReconciler) patchIfNecessary(ctx context.Context, obj runtime.Object, patch client.Patch, opts ...client.PatchOption) error {
+func (r *ExternalServiceReconciler) patchIfNecessary(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
 	data, err := patch.Data(obj)
 	if err != nil {
 		return err

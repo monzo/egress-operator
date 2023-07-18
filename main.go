@@ -64,6 +64,7 @@ func main() {
 		Scheme:             scheme,
 		MetricsBindAddress: metricsAddr,
 		LeaderElection:     enableLeaderElection,
+		LeaderElectionID:   "egress-operator",
 		LeaseDuration:      &leaseDuration,
 		RenewDeadline:      &renewDeadline,
 		Port:               9443,

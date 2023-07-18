@@ -17,6 +17,7 @@ limitations under the License.
 package record
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"time"
@@ -25,13 +26,13 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/clock"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record/util"
 	ref "k8s.io/client-go/tools/reference"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
+	"k8s.io/utils/clock"
 )
 
 const maxTriesPerEvent = 12
@@ -81,7 +82,10 @@ type CorrelatorOptions struct {
 	MaxIntervalInSeconds int
 	// The clock used by the EventAggregator to allow for testing
 	// If not specified (zero value), clock.RealClock{} will be used
-	Clock clock.Clock
+	Clock clock.PassiveClock
+	// The func used by EventFilterFunc, which returns a key for given event, based on which filtering will take place
+	// If not specified (zero value), getSpamKey will be used
+	SpamKeyFunc EventSpamKeyFunc
 }
 
 // EventRecorder knows how to record events on behalf of an EventSource.
@@ -89,7 +93,7 @@ type EventRecorder interface {
 	// Event constructs an event from the given information and puts it in the queue for sending.
 	// 'object' is the object this event is about. Event will make a reference-- or you may also
 	// pass a reference to the object directly.
-	// 'type' of this event, and can be one of Normal, Warning. New types could be added in future
+	// 'eventtype' of this event, and can be one of Normal, Warning. New types could be added in future
 	// 'reason' is the reason this event is generated. 'reason' should be short and unique; it
 	// should be in UpperCamelCase format (starting with a capital letter). "reason" will be used
 	// to automate handling of events, so imagine people writing switch statements to handle them.
@@ -101,9 +105,6 @@ type EventRecorder interface {
 
 	// Eventf is just like Event, but with Sprintf for the message field.
 	Eventf(object runtime.Object, eventtype, reason, messageFmt string, args ...interface{})
-
-	// PastEventf is just like Eventf, but with an option to specify the event's 'timestamp' field.
-	PastEventf(object runtime.Object, timestamp metav1.Time, eventtype, reason, messageFmt string, args ...interface{})
 
 	// AnnotatedEventf is just like eventf, but with annotations attached
 	AnnotatedEventf(object runtime.Object, annotations map[string]string, eventtype, reason, messageFmt string, args ...interface{})
@@ -124,52 +125,88 @@ type EventBroadcaster interface {
 	// function. The return value can be ignored or used to stop recording, if desired.
 	StartLogging(logf func(format string, args ...interface{})) watch.Interface
 
+	// StartStructuredLogging starts sending events received from this EventBroadcaster to the structured
+	// logging function. The return value can be ignored or used to stop recording, if desired.
+	StartStructuredLogging(verbosity klog.Level) watch.Interface
+
 	// NewRecorder returns an EventRecorder that can be used to send events to this EventBroadcaster
 	// with the event source set to the given event source.
 	NewRecorder(scheme *runtime.Scheme, source v1.EventSource) EventRecorder
+
+	// Shutdown shuts down the broadcaster. Once the broadcaster is shut
+	// down, it will only try to record an event in a sink once before
+	// giving up on it with an error message.
+	Shutdown()
+}
+
+// EventRecorderAdapter is a wrapper around a "k8s.io/client-go/tools/record".EventRecorder
+// implementing the new "k8s.io/client-go/tools/events".EventRecorder interface.
+type EventRecorderAdapter struct {
+	recorder EventRecorder
+}
+
+// NewEventRecorderAdapter returns an adapter implementing the new
+// "k8s.io/client-go/tools/events".EventRecorder interface.
+func NewEventRecorderAdapter(recorder EventRecorder) *EventRecorderAdapter {
+	return &EventRecorderAdapter{
+		recorder: recorder,
+	}
+}
+
+// Eventf is a wrapper around v1 Eventf
+func (a *EventRecorderAdapter) Eventf(regarding, _ runtime.Object, eventtype, reason, action, note string, args ...interface{}) {
+	a.recorder.Eventf(regarding, eventtype, reason, note, args...)
 }
 
 // Creates a new event broadcaster.
 func NewBroadcaster() EventBroadcaster {
-	return &eventBroadcasterImpl{
-		Broadcaster:   watch.NewBroadcaster(maxQueuedEvents, watch.DropIfChannelFull),
-		sleepDuration: defaultSleepDuration,
-	}
+	return newEventBroadcaster(watch.NewLongQueueBroadcaster(maxQueuedEvents, watch.DropIfChannelFull), defaultSleepDuration)
 }
 
 func NewBroadcasterForTests(sleepDuration time.Duration) EventBroadcaster {
-	return &eventBroadcasterImpl{
-		Broadcaster:   watch.NewBroadcaster(maxQueuedEvents, watch.DropIfChannelFull),
-		sleepDuration: sleepDuration,
-	}
+	return newEventBroadcaster(watch.NewLongQueueBroadcaster(maxQueuedEvents, watch.DropIfChannelFull), sleepDuration)
 }
 
 func NewBroadcasterWithCorrelatorOptions(options CorrelatorOptions) EventBroadcaster {
-	return &eventBroadcasterImpl{
-		Broadcaster:   watch.NewBroadcaster(maxQueuedEvents, watch.DropIfChannelFull),
-		sleepDuration: defaultSleepDuration,
-		options:       options,
+	eventBroadcaster := newEventBroadcaster(watch.NewLongQueueBroadcaster(maxQueuedEvents, watch.DropIfChannelFull), defaultSleepDuration)
+	eventBroadcaster.options = options
+	return eventBroadcaster
+}
+
+func newEventBroadcaster(broadcaster *watch.Broadcaster, sleepDuration time.Duration) *eventBroadcasterImpl {
+	eventBroadcaster := &eventBroadcasterImpl{
+		Broadcaster:   broadcaster,
+		sleepDuration: sleepDuration,
 	}
+	eventBroadcaster.cancelationCtx, eventBroadcaster.cancel = context.WithCancel(context.Background())
+	return eventBroadcaster
 }
 
 type eventBroadcasterImpl struct {
 	*watch.Broadcaster
-	sleepDuration time.Duration
-	options       CorrelatorOptions
+	sleepDuration  time.Duration
+	options        CorrelatorOptions
+	cancelationCtx context.Context
+	cancel         func()
 }
 
 // StartRecordingToSink starts sending events received from the specified eventBroadcaster to the given sink.
 // The return value can be ignored or used to stop recording, if desired.
 // TODO: make me an object with parameterizable queue length and retry interval
-func (eventBroadcaster *eventBroadcasterImpl) StartRecordingToSink(sink EventSink) watch.Interface {
-	eventCorrelator := NewEventCorrelatorWithOptions(eventBroadcaster.options)
-	return eventBroadcaster.StartEventWatcher(
+func (e *eventBroadcasterImpl) StartRecordingToSink(sink EventSink) watch.Interface {
+	eventCorrelator := NewEventCorrelatorWithOptions(e.options)
+	return e.StartEventWatcher(
 		func(event *v1.Event) {
-			recordToSink(sink, event, eventCorrelator, eventBroadcaster.sleepDuration)
+			e.recordToSink(sink, event, eventCorrelator)
 		})
 }
 
-func recordToSink(sink EventSink, event *v1.Event, eventCorrelator *EventCorrelator, sleepDuration time.Duration) {
+func (e *eventBroadcasterImpl) Shutdown() {
+	e.Broadcaster.Shutdown()
+	e.cancel()
+}
+
+func (e *eventBroadcasterImpl) recordToSink(sink EventSink, event *v1.Event, eventCorrelator *EventCorrelator) {
 	// Make a copy before modification, because there could be multiple listeners.
 	// Events are safe to copy like this.
 	eventCopy := *event
@@ -191,12 +228,18 @@ func recordToSink(sink EventSink, event *v1.Event, eventCorrelator *EventCorrela
 			klog.Errorf("Unable to write event '%#v' (retry limit exceeded!)", event)
 			break
 		}
+
 		// Randomize the first sleep so that various clients won't all be
 		// synced up if the master goes down.
+		delay := e.sleepDuration
 		if tries == 1 {
-			time.Sleep(time.Duration(float64(sleepDuration) * rand.Float64()))
-		} else {
-			time.Sleep(sleepDuration)
+			delay = time.Duration(float64(delay) * rand.Float64())
+		}
+		select {
+		case <-e.cancelationCtx.Done():
+			klog.Errorf("Unable to write event '%#v' (broadcaster is shut down)", event)
+			return
+		case <-time.After(delay):
 		}
 	}
 }
@@ -243,23 +286,35 @@ func recordEvent(sink EventSink, event *v1.Event, patch []byte, updateExistingEv
 	default:
 		// This case includes actual http transport errors. Go ahead and retry.
 	}
-	klog.Errorf("Unable to write event: '%v' (may retry after sleeping)", err)
+	klog.Errorf("Unable to write event: '%#v': '%v'(may retry after sleeping)", event, err)
 	return false
 }
 
 // StartLogging starts sending events received from this EventBroadcaster to the given logging function.
 // The return value can be ignored or used to stop recording, if desired.
-func (eventBroadcaster *eventBroadcasterImpl) StartLogging(logf func(format string, args ...interface{})) watch.Interface {
-	return eventBroadcaster.StartEventWatcher(
+func (e *eventBroadcasterImpl) StartLogging(logf func(format string, args ...interface{})) watch.Interface {
+	return e.StartEventWatcher(
 		func(e *v1.Event) {
 			logf("Event(%#v): type: '%v' reason: '%v' %v", e.InvolvedObject, e.Type, e.Reason, e.Message)
 		})
 }
 
+// StartStructuredLogging starts sending events received from this EventBroadcaster to the structured logging function.
+// The return value can be ignored or used to stop recording, if desired.
+func (e *eventBroadcasterImpl) StartStructuredLogging(verbosity klog.Level) watch.Interface {
+	return e.StartEventWatcher(
+		func(e *v1.Event) {
+			klog.V(verbosity).InfoS("Event occurred", "object", klog.KRef(e.InvolvedObject.Namespace, e.InvolvedObject.Name), "fieldPath", e.InvolvedObject.FieldPath, "kind", e.InvolvedObject.Kind, "apiVersion", e.InvolvedObject.APIVersion, "type", e.Type, "reason", e.Reason, "message", e.Message)
+		})
+}
+
 // StartEventWatcher starts sending events received from this EventBroadcaster to the given event handler function.
 // The return value can be ignored or used to stop recording, if desired.
-func (eventBroadcaster *eventBroadcasterImpl) StartEventWatcher(eventHandler func(*v1.Event)) watch.Interface {
-	watcher := eventBroadcaster.Watch()
+func (e *eventBroadcasterImpl) StartEventWatcher(eventHandler func(*v1.Event)) watch.Interface {
+	watcher, err := e.Watch()
+	if err != nil {
+		klog.Errorf("Unable start event watcher: '%v' (will not retry!)", err)
+	}
 	go func() {
 		defer utilruntime.HandleCrash()
 		for watchEvent := range watcher.ResultChan() {
@@ -276,18 +331,18 @@ func (eventBroadcaster *eventBroadcasterImpl) StartEventWatcher(eventHandler fun
 }
 
 // NewRecorder returns an EventRecorder that records events with the given event source.
-func (eventBroadcaster *eventBroadcasterImpl) NewRecorder(scheme *runtime.Scheme, source v1.EventSource) EventRecorder {
-	return &recorderImpl{scheme, source, eventBroadcaster.Broadcaster, clock.RealClock{}}
+func (e *eventBroadcasterImpl) NewRecorder(scheme *runtime.Scheme, source v1.EventSource) EventRecorder {
+	return &recorderImpl{scheme, source, e.Broadcaster, clock.RealClock{}}
 }
 
 type recorderImpl struct {
 	scheme *runtime.Scheme
 	source v1.EventSource
 	*watch.Broadcaster
-	clock clock.Clock
+	clock clock.PassiveClock
 }
 
-func (recorder *recorderImpl) generateEvent(object runtime.Object, annotations map[string]string, timestamp metav1.Time, eventtype, reason, message string) {
+func (recorder *recorderImpl) generateEvent(object runtime.Object, annotations map[string]string, eventtype, reason, message string) {
 	ref, err := ref.GetReference(recorder.scheme, object)
 	if err != nil {
 		klog.Errorf("Could not construct reference to: '%#v' due to: '%v'. Will not report event: '%v' '%v' '%v'", object, err, eventtype, reason, message)
@@ -302,27 +357,31 @@ func (recorder *recorderImpl) generateEvent(object runtime.Object, annotations m
 	event := recorder.makeEvent(ref, annotations, eventtype, reason, message)
 	event.Source = recorder.source
 
-	go func() {
-		// NOTE: events should be a non-blocking operation
-		defer utilruntime.HandleCrash()
-		recorder.Action(watch.Added, event)
-	}()
+	// NOTE: events should be a non-blocking operation, but we also need to not
+	// put this in a goroutine, otherwise we'll race to write to a closed channel
+	// when we go to shut down this broadcaster.  Just drop events if we get overloaded,
+	// and log an error if that happens (we've configured the broadcaster to drop
+	// outgoing events anyway).
+	sent, err := recorder.ActionOrDrop(watch.Added, event)
+	if err != nil {
+		klog.Errorf("unable to record event: %v (will not retry!)", err)
+		return
+	}
+	if !sent {
+		klog.Errorf("unable to record event: too many queued events, dropped event %#v", event)
+	}
 }
 
 func (recorder *recorderImpl) Event(object runtime.Object, eventtype, reason, message string) {
-	recorder.generateEvent(object, nil, metav1.Now(), eventtype, reason, message)
+	recorder.generateEvent(object, nil, eventtype, reason, message)
 }
 
 func (recorder *recorderImpl) Eventf(object runtime.Object, eventtype, reason, messageFmt string, args ...interface{}) {
 	recorder.Event(object, eventtype, reason, fmt.Sprintf(messageFmt, args...))
 }
 
-func (recorder *recorderImpl) PastEventf(object runtime.Object, timestamp metav1.Time, eventtype, reason, messageFmt string, args ...interface{}) {
-	recorder.generateEvent(object, nil, timestamp, eventtype, reason, fmt.Sprintf(messageFmt, args...))
-}
-
 func (recorder *recorderImpl) AnnotatedEventf(object runtime.Object, annotations map[string]string, eventtype, reason, messageFmt string, args ...interface{}) {
-	recorder.generateEvent(object, annotations, metav1.Now(), eventtype, reason, fmt.Sprintf(messageFmt, args...))
+	recorder.generateEvent(object, annotations, eventtype, reason, fmt.Sprintf(messageFmt, args...))
 }
 
 func (recorder *recorderImpl) makeEvent(ref *v1.ObjectReference, annotations map[string]string, eventtype, reason, message string) *v1.Event {

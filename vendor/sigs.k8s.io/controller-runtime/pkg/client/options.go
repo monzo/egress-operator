@@ -20,6 +20,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 )
 
 // {{{ "Functional" Option Interfaces
@@ -34,6 +35,12 @@ type CreateOption interface {
 type DeleteOption interface {
 	// ApplyToDelete applies this configuration to the given delete options.
 	ApplyToDelete(*DeleteOptions)
+}
+
+// GetOption is some configuration that modifies options for a get request.
+type GetOption interface {
+	// ApplyToGet applies this configuration to the given get options.
+	ApplyToGet(*GetOptions)
 }
 
 // ListOption is some configuration that modifies options for a list request.
@@ -60,6 +67,29 @@ type DeleteAllOfOption interface {
 	ApplyToDeleteAllOf(*DeleteAllOfOptions)
 }
 
+// SubResourceGetOption modifies options for a SubResource Get request.
+type SubResourceGetOption interface {
+	ApplyToSubResourceGet(*SubResourceGetOptions)
+}
+
+// SubResourceUpdateOption is some configuration that modifies options for a update request.
+type SubResourceUpdateOption interface {
+	// ApplyToSubResourceUpdate applies this configuration to the given update options.
+	ApplyToSubResourceUpdate(*SubResourceUpdateOptions)
+}
+
+// SubResourceCreateOption is some configuration that modifies options for a create request.
+type SubResourceCreateOption interface {
+	// ApplyToSubResourceCreate applies this configuration to the given create options.
+	ApplyToSubResourceCreate(*SubResourceCreateOptions)
+}
+
+// SubResourcePatchOption configures a subresource patch request.
+type SubResourcePatchOption interface {
+	// ApplyToSubResourcePatch applies the configuration on the given patch options.
+	ApplyToSubResourcePatch(*SubResourcePatchOptions)
+}
+
 // }}}
 
 // {{{ Multi-Type Options
@@ -70,29 +100,72 @@ var DryRunAll = dryRunAll{}
 
 type dryRunAll struct{}
 
+// ApplyToCreate applies this configuration to the given create options.
 func (dryRunAll) ApplyToCreate(opts *CreateOptions) {
 	opts.DryRun = []string{metav1.DryRunAll}
 }
+
+// ApplyToUpdate applies this configuration to the given update options.
 func (dryRunAll) ApplyToUpdate(opts *UpdateOptions) {
 	opts.DryRun = []string{metav1.DryRunAll}
 }
+
+// ApplyToPatch applies this configuration to the given patch options.
 func (dryRunAll) ApplyToPatch(opts *PatchOptions) {
 	opts.DryRun = []string{metav1.DryRunAll}
 }
+
+// ApplyToPatch applies this configuration to the given delete options.
 func (dryRunAll) ApplyToDelete(opts *DeleteOptions) {
+	opts.DryRun = []string{metav1.DryRunAll}
+}
+
+func (dryRunAll) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
+	opts.DryRun = []string{metav1.DryRunAll}
+}
+
+func (dryRunAll) ApplyToSubResourceCreate(opts *SubResourceCreateOptions) {
+	opts.DryRun = []string{metav1.DryRunAll}
+}
+
+func (dryRunAll) ApplyToSubResourceUpdate(opts *SubResourceUpdateOptions) {
+	opts.DryRun = []string{metav1.DryRunAll}
+}
+
+func (dryRunAll) ApplyToSubResourcePatch(opts *SubResourcePatchOptions) {
 	opts.DryRun = []string{metav1.DryRunAll}
 }
 
 // FieldOwner set the field manager name for the given server-side apply patch.
 type FieldOwner string
 
+// ApplyToPatch applies this configuration to the given patch options.
 func (f FieldOwner) ApplyToPatch(opts *PatchOptions) {
 	opts.FieldManager = string(f)
 }
+
+// ApplyToCreate applies this configuration to the given create options.
 func (f FieldOwner) ApplyToCreate(opts *CreateOptions) {
 	opts.FieldManager = string(f)
 }
+
+// ApplyToUpdate applies this configuration to the given update options.
 func (f FieldOwner) ApplyToUpdate(opts *UpdateOptions) {
+	opts.FieldManager = string(f)
+}
+
+// ApplyToSubResourcePatch applies this configuration to the given patch options.
+func (f FieldOwner) ApplyToSubResourcePatch(opts *SubResourcePatchOptions) {
+	opts.FieldManager = string(f)
+}
+
+// ApplyToSubResourceCreate applies this configuration to the given create options.
+func (f FieldOwner) ApplyToSubResourceCreate(opts *SubResourceCreateOptions) {
+	opts.FieldManager = string(f)
+}
+
+// ApplyToSubResourceUpdate applies this configuration to the given update options.
+func (f FieldOwner) ApplyToSubResourceUpdate(opts *SubResourceUpdateOptions) {
 	opts.FieldManager = string(f)
 }
 
@@ -142,7 +215,7 @@ func (o *CreateOptions) ApplyOptions(opts []CreateOption) *CreateOptions {
 	return o
 }
 
-// ApplyToCreate implements CreateOption
+// ApplyToCreate implements CreateOption.
 func (o *CreateOptions) ApplyToCreate(co *CreateOptions) {
 	if o.DryRun != nil {
 		co.DryRun = o.DryRun
@@ -156,11 +229,6 @@ func (o *CreateOptions) ApplyToCreate(co *CreateOptions) {
 }
 
 var _ CreateOption = &CreateOptions{}
-
-// CreateDryRunAll sets the "dry run" option to "all".
-//
-// Deprecated: Use DryRunAll
-var CreateDryRunAll = DryRunAll
 
 // }}}
 
@@ -228,7 +296,7 @@ func (o *DeleteOptions) ApplyOptions(opts []DeleteOption) *DeleteOptions {
 
 var _ DeleteOption = &DeleteOptions{}
 
-// ApplyToDelete implements DeleteOption
+// ApplyToDelete implements DeleteOption.
 func (o *DeleteOptions) ApplyToDelete(do *DeleteOptions) {
 	if o.GracePeriodSeconds != nil {
 		do.GracePeriodSeconds = o.GracePeriodSeconds
@@ -251,35 +319,90 @@ func (o *DeleteOptions) ApplyToDelete(do *DeleteOptions) {
 // to the given number of seconds.
 type GracePeriodSeconds int64
 
+// ApplyToDelete applies this configuration to the given delete options.
 func (s GracePeriodSeconds) ApplyToDelete(opts *DeleteOptions) {
 	secs := int64(s)
 	opts.GracePeriodSeconds = &secs
 }
 
+// ApplyToDeleteAllOf applies this configuration to the given an List options.
 func (s GracePeriodSeconds) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
 	s.ApplyToDelete(&opts.DeleteOptions)
 }
 
+// Preconditions must be fulfilled before an operation (update, delete, etc.) is carried out.
 type Preconditions metav1.Preconditions
 
+// ApplyToDelete applies this configuration to the given delete options.
 func (p Preconditions) ApplyToDelete(opts *DeleteOptions) {
 	preconds := metav1.Preconditions(p)
 	opts.Preconditions = &preconds
 }
 
+// ApplyToDeleteAllOf applies this configuration to the given an List options.
 func (p Preconditions) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
 	p.ApplyToDelete(&opts.DeleteOptions)
 }
 
+// PropagationPolicy determined whether and how garbage collection will be
+// performed. Either this field or OrphanDependents may be set, but not both.
+// The default policy is decided by the existing finalizer set in the
+// metadata.finalizers and the resource-specific default policy.
+// Acceptable values are: 'Orphan' - orphan the dependents; 'Background' -
+// allow the garbage collector to delete the dependents in the background;
+// 'Foreground' - a cascading policy that deletes all dependents in the
+// foreground.
 type PropagationPolicy metav1.DeletionPropagation
 
+// ApplyToDelete applies the given delete options on these options.
+// It will propagate to the dependents of the object to let the garbage collector handle it.
 func (p PropagationPolicy) ApplyToDelete(opts *DeleteOptions) {
 	policy := metav1.DeletionPropagation(p)
 	opts.PropagationPolicy = &policy
 }
 
+// ApplyToDeleteAllOf applies this configuration to the given an List options.
 func (p PropagationPolicy) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
 	p.ApplyToDelete(&opts.DeleteOptions)
+}
+
+// }}}
+
+// {{{ Get Options
+
+// GetOptions contains options for get operation.
+// Now it only has a Raw field, with support for specific resourceVersion.
+type GetOptions struct {
+	// Raw represents raw GetOptions, as passed to the API server.  Note
+	// that these may not be respected by all implementations of interface.
+	Raw *metav1.GetOptions
+}
+
+var _ GetOption = &GetOptions{}
+
+// ApplyToGet implements GetOption for GetOptions.
+func (o *GetOptions) ApplyToGet(lo *GetOptions) {
+	if o.Raw != nil {
+		lo.Raw = o.Raw
+	}
+}
+
+// AsGetOptions returns these options as a flattened metav1.GetOptions.
+// This may mutate the Raw field.
+func (o *GetOptions) AsGetOptions() *metav1.GetOptions {
+	if o == nil || o.Raw == nil {
+		return &metav1.GetOptions{}
+	}
+	return o.Raw
+}
+
+// ApplyOptions applies the given get options on these options,
+// and then returns itself (for convenient chaining).
+func (o *GetOptions) ApplyOptions(opts []GetOption) *GetOptions {
+	for _, opt := range opts {
+		opt.ApplyToGet(o)
+	}
+	return o
 }
 
 // }}}
@@ -291,7 +414,7 @@ func (p PropagationPolicy) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
 // pre-parsed selectors (since generally, selectors will be executed
 // against the cache).
 type ListOptions struct {
-	// LabelSelector filters results by label.  Use SetLabelSelector to
+	// LabelSelector filters results by label. Use labels.Parse() to
 	// set from raw string form.
 	LabelSelector labels.Selector
 	// FieldSelector filters results by a particular field.  In order
@@ -314,6 +437,12 @@ type ListOptions struct {
 	// it has expired. This field is not supported if watch is true in the Raw ListOptions.
 	Continue string
 
+	// UnsafeDisableDeepCopy indicates not to deep copy objects during list objects.
+	// Be very careful with this, when enabled you must DeepCopy any object before mutating it,
+	// otherwise you will mutate the object in the cache.
+	// +optional
+	UnsafeDisableDeepCopy *bool
+
 	// Raw represents raw ListOptions, as passed to the API server.  Note
 	// that these may not be respected by all implementations of interface,
 	// and the LabelSelector, FieldSelector, Limit and Continue fields are ignored.
@@ -322,7 +451,7 @@ type ListOptions struct {
 
 var _ ListOption = &ListOptions{}
 
-// ApplyToList implements ListOption for ListOptions
+// ApplyToList implements ListOption for ListOptions.
 func (o *ListOptions) ApplyToList(lo *ListOptions) {
 	if o.LabelSelector != nil {
 		lo.LabelSelector = o.LabelSelector
@@ -341,6 +470,9 @@ func (o *ListOptions) ApplyToList(lo *ListOptions) {
 	}
 	if o.Continue != "" {
 		lo.Continue = o.Continue
+	}
+	if o.UnsafeDisableDeepCopy != nil {
+		lo.UnsafeDisableDeepCopy = o.UnsafeDisableDeepCopy
 	}
 }
 
@@ -378,13 +510,36 @@ func (o *ListOptions) ApplyOptions(opts []ListOption) *ListOptions {
 // MatchingLabels filters the list/delete operation on the given set of labels.
 type MatchingLabels map[string]string
 
+// ApplyToList applies this configuration to the given list options.
 func (m MatchingLabels) ApplyToList(opts *ListOptions) {
 	// TODO(directxman12): can we avoid reserializing this over and over?
-	sel := labels.SelectorFromSet(map[string]string(m))
+	sel := labels.SelectorFromValidatedSet(map[string]string(m))
 	opts.LabelSelector = sel
 }
 
+// ApplyToDeleteAllOf applies this configuration to the given an List options.
 func (m MatchingLabels) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
+	m.ApplyToList(&opts.ListOptions)
+}
+
+// HasLabels filters the list/delete operation checking if the set of labels exists
+// without checking their values.
+type HasLabels []string
+
+// ApplyToList applies this configuration to the given list options.
+func (m HasLabels) ApplyToList(opts *ListOptions) {
+	sel := labels.NewSelector()
+	for _, label := range m {
+		r, err := labels.NewRequirement(label, selection.Exists, nil)
+		if err == nil {
+			sel = sel.Add(*r)
+		}
+	}
+	opts.LabelSelector = sel
+}
+
+// ApplyToDeleteAllOf applies this configuration to the given an List options.
+func (m HasLabels) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
 	m.ApplyToList(&opts.ListOptions)
 }
 
@@ -395,32 +550,28 @@ type MatchingLabelsSelector struct {
 	labels.Selector
 }
 
+// ApplyToList applies this configuration to the given list options.
 func (m MatchingLabelsSelector) ApplyToList(opts *ListOptions) {
 	opts.LabelSelector = m
 }
 
+// ApplyToDeleteAllOf applies this configuration to the given an List options.
 func (m MatchingLabelsSelector) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
 	m.ApplyToList(&opts.ListOptions)
 }
 
-// MatchingField filters the list operation on the given field selector
-// (or index in the case of cached lists).
-//
-// Deprecated: Use MatchingFields
-func MatchingField(name, val string) MatchingFields {
-	return MatchingFields{name: val}
-}
-
-// MatchingField filters the list/delete operation on the given field Set
+// MatchingFields filters the list/delete operation on the given field Set
 // (or index in the case of cached lists).
 type MatchingFields fields.Set
 
+// ApplyToList applies this configuration to the given list options.
 func (m MatchingFields) ApplyToList(opts *ListOptions) {
 	// TODO(directxman12): can we avoid re-serializing this?
-	sel := fields.SelectorFromSet(fields.Set(m))
+	sel := fields.Set(m).AsSelector()
 	opts.FieldSelector = sel
 }
 
+// ApplyToDeleteAllOf applies this configuration to the given an List options.
 func (m MatchingFields) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
 	m.ApplyToList(&opts.ListOptions)
 }
@@ -432,10 +583,12 @@ type MatchingFieldsSelector struct {
 	fields.Selector
 }
 
+// ApplyToList applies this configuration to the given list options.
 func (m MatchingFieldsSelector) ApplyToList(opts *ListOptions) {
 	opts.FieldSelector = m
 }
 
+// ApplyToDeleteAllOf applies this configuration to the given an List options.
 func (m MatchingFieldsSelector) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
 	m.ApplyToList(&opts.ListOptions)
 }
@@ -443,12 +596,19 @@ func (m MatchingFieldsSelector) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
 // InNamespace restricts the list/delete operation to the given namespace.
 type InNamespace string
 
+// ApplyToList applies this configuration to the given list options.
 func (n InNamespace) ApplyToList(opts *ListOptions) {
 	opts.Namespace = string(n)
 }
 
+// ApplyToDeleteAllOf applies this configuration to the given an List options.
 func (n InNamespace) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
 	n.ApplyToList(&opts.ListOptions)
+}
+
+// AsSelector returns a selector that matches objects in the given namespace.
+func (n InNamespace) AsSelector() fields.Selector {
+	return fields.SelectorFromSet(fields.Set{"metadata.namespace": string(n)})
 }
 
 // Limit specifies the maximum number of results to return from the server.
@@ -456,15 +616,36 @@ func (n InNamespace) ApplyToDeleteAllOf(opts *DeleteAllOfOptions) {
 // does not support setting it for deletecollection operations.
 type Limit int64
 
+// ApplyToList applies this configuration to the given an list options.
 func (l Limit) ApplyToList(opts *ListOptions) {
 	opts.Limit = int64(l)
 }
+
+// UnsafeDisableDeepCopyOption indicates not to deep copy objects during list objects.
+// Be very careful with this, when enabled you must DeepCopy any object before mutating it,
+// otherwise you will mutate the object in the cache.
+type UnsafeDisableDeepCopyOption bool
+
+// ApplyToList applies this configuration to the given an List options.
+func (d UnsafeDisableDeepCopyOption) ApplyToList(opts *ListOptions) {
+	definitelyTrue := true
+	definitelyFalse := false
+	if d {
+		opts.UnsafeDisableDeepCopy = &definitelyTrue
+	} else {
+		opts.UnsafeDisableDeepCopy = &definitelyFalse
+	}
+}
+
+// UnsafeDisableDeepCopy indicates not to deep copy objects during list objects.
+const UnsafeDisableDeepCopy = UnsafeDisableDeepCopyOption(true)
 
 // Continue sets a continuation token to retrieve chunks of results when using limit.
 // Continue does not implement DeleteAllOfOption interface because the server
 // does not support setting it for deletecollection operations.
 type Continue string
 
+// ApplyToList applies this configuration to the given an List options.
 func (c Continue) ApplyToList(opts *ListOptions) {
 	opts.Continue = string(c)
 }
@@ -517,7 +698,7 @@ func (o *UpdateOptions) ApplyOptions(opts []UpdateOption) *UpdateOptions {
 
 var _ UpdateOption = &UpdateOptions{}
 
-// ApplyToUpdate implements UpdateOption
+// ApplyToUpdate implements UpdateOption.
 func (o *UpdateOptions) ApplyToUpdate(uo *UpdateOptions) {
 	if o.DryRun != nil {
 		uo.DryRun = o.DryRun
@@ -529,11 +710,6 @@ func (o *UpdateOptions) ApplyToUpdate(uo *UpdateOptions) {
 		uo.Raw = o.Raw
 	}
 }
-
-// UpdateDryRunAll sets the "dry run" option to "all".
-//
-// Deprecated: Use DryRunAll
-var UpdateDryRunAll = DryRunAll
 
 // }}}
 
@@ -589,7 +765,7 @@ func (o *PatchOptions) AsPatchOptions() *metav1.PatchOptions {
 
 var _ PatchOption = &PatchOptions{}
 
-// ApplyToPatch implements PatchOptions
+// ApplyToPatch implements PatchOptions.
 func (o *PatchOptions) ApplyToPatch(po *PatchOptions) {
 	if o.DryRun != nil {
 		po.DryRun = o.DryRun
@@ -617,10 +793,10 @@ func (forceOwnership) ApplyToPatch(opts *PatchOptions) {
 	opts.Force = &definitelyTrue
 }
 
-// PatchDryRunAll sets the "dry run" option to "all".
-//
-// Deprecated: Use DryRunAll
-var PatchDryRunAll = DryRunAll
+func (forceOwnership) ApplyToSubResourcePatch(opts *SubResourcePatchOptions) {
+	definitelyTrue := true
+	opts.Force = &definitelyTrue
+}
 
 // }}}
 
@@ -646,7 +822,7 @@ func (o *DeleteAllOfOptions) ApplyOptions(opts []DeleteAllOfOption) *DeleteAllOf
 
 var _ DeleteAllOfOption = &DeleteAllOfOptions{}
 
-// ApplyToDeleteAllOf implements DeleteAllOfOption
+// ApplyToDeleteAllOf implements DeleteAllOfOption.
 func (o *DeleteAllOfOptions) ApplyToDeleteAllOf(do *DeleteAllOfOptions) {
 	o.ApplyToList(&do.ListOptions)
 	o.ApplyToDelete(&do.DeleteOptions)
