@@ -23,6 +23,7 @@ import (
 	egressv1 "github.com/monzo/egress-operator/api/v1"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gexec"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -82,6 +83,13 @@ var _ = BeforeSuite(func(done Done) {
 	go func() {
 		err = k8sManager.Start(ctrl.SetupSignalHandler())
 		Expect(err).ToNot(HaveOccurred())
+
+		gexec.KillAndWait()
+		// Teardown the test environment once controller is fnished.
+		// Otherwise from Kubernetes 1.21+, teardon timeouts waiting on
+		// kube-apiserver to return
+		err := testEnv.Stop()
+		Expect(err).ToNot(HaveOccurred())
 	}()
 
 	k8sClient = k8sManager.GetClient()
@@ -91,9 +99,3 @@ var _ = BeforeSuite(func(done Done) {
 
 	close(done)
 }, 60)
-
-var _ = AfterSuite(func() {
-	By("tearing down the test environment")
-	err := testEnv.Stop()
-	Expect(err).ToNot(HaveOccurred())
-})
