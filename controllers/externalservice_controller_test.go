@@ -146,7 +146,7 @@ func assertState(key types.NamespacedName, es *v1.ExternalService) {
 
 		return d
 	}, timeout, interval).Should(And(
-		WithTransform(func(d *appsv1.Deployment) appsv1.DeploymentSpec { return d.Spec }, Equal(deployment(es, cHash).Spec)),
+		WithTransform(func(d *appsv1.Deployment) appsv1.DeploymentSpec { return d.Spec }, BeComparableTo(deployment(es, cHash).Spec)),
 		assertOwner(key.Name),
 		assertLabels(deployment(es, cHash)),
 	))
@@ -157,7 +157,7 @@ func assertState(key types.NamespacedName, es *v1.ExternalService) {
 
 		return n
 	}, timeout, interval).Should(And(
-		WithTransform(func(d *networkingv1.NetworkPolicy) networkingv1.NetworkPolicySpec { return d.Spec }, Equal(networkPolicy(es).Spec)),
+		WithTransform(func(d *networkingv1.NetworkPolicy) networkingv1.NetworkPolicySpec { return d.Spec }, BeComparableTo(networkPolicy(es).Spec)),
 		assertOwner(key.Name),
 		assertLabels(networkPolicy(es)),
 	))
@@ -166,10 +166,14 @@ func assertState(key types.NamespacedName, es *v1.ExternalService) {
 		s := &corev1.Service{}
 		_ = k8sClient.Get(context.Background(), key, s)
 		s.Spec.ClusterIP = ""
+		s.Spec.ClusterIPs = nil
+		s.Spec.IPFamilies = nil
+		s.Spec.IPFamilyPolicy = nil
+		s.Spec.InternalTrafficPolicy = nil
 
 		return s
 	}, timeout, interval).Should(And(
-		WithTransform(func(d *corev1.Service) corev1.ServiceSpec { return d.Spec }, Equal(service(es, true, nil).Spec)),
+		WithTransform(func(d *corev1.Service) corev1.ServiceSpec { return d.Spec }, BeComparableTo(service(es, true, nil).Spec)),
 		assertOwner(key.Name),
 		assertLabels(service(es, true, nil)),
 	))
@@ -180,7 +184,7 @@ func assertState(key types.NamespacedName, es *v1.ExternalService) {
 
 		return c
 	}, timeout, interval).Should(And(
-		WithTransform(func(d *corev1.ConfigMap) map[string]string { return d.Data }, Equal(cTarget.Data)),
+		WithTransform(func(d *corev1.ConfigMap) map[string]string { return d.Data }, BeComparableTo(cTarget.Data)),
 		assertOwner(key.Name),
 		assertLabels(cTarget),
 	))
