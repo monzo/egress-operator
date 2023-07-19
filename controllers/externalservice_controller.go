@@ -38,6 +38,8 @@ type ExternalServiceReconciler struct {
 	client.Client
 	Log    logr.Logger
 	Scheme *runtime.Scheme
+
+	EnablePodDisruptionBudgets bool
 }
 
 // +kubebuilder:rbac:groups=egress.monzo.com,resources=externalservices,verbs=get;list;watch;create;update;patch;delete
@@ -84,6 +86,13 @@ func (r *ExternalServiceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	if err := r.reconcileService(ctx, req, es); err != nil {
 		log.Error(err, "unable to reconcile Service")
 		return ctrl.Result{}, err
+	}
+
+	if r.EnablePodDisruptionBudgets {
+		if err := r.reconcilePodDisruptionBudget(ctx, req, es); err != nil {
+			log.Error(err, "unable to reconcile PodDisruptionBudget")
+			return ctrl.Result{}, err
+		}
 	}
 
 	return ctrl.Result{}, nil

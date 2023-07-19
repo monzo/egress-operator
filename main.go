@@ -49,11 +49,16 @@ func init() {
 }
 
 func main() {
-	var metricsAddr string
-	var enableLeaderElection bool
+	var (
+		metricsAddr                string
+		enableLeaderElection       bool
+		enablePodDisruptionBudgets bool
+	)
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
+	flag.BoolVar(&enablePodDisruptionBudgets, "enable-pod-disruption-budgets", false,
+		"Enable deploying pod disruption budgets for egress gateways.")
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(func(o *zap.Options) {
@@ -76,9 +81,10 @@ func main() {
 	}
 
 	if err = (&controllers.ExternalServiceReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("ExternalService"),
-		Scheme: mgr.GetScheme(),
+		Client:                     mgr.GetClient(),
+		Log:                        ctrl.Log.WithName("controllers").WithName("ExternalService"),
+		Scheme:                     mgr.GetScheme(),
+		EnablePodDisruptionBudgets: enablePodDisruptionBudgets,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ExternalService")
 		os.Exit(1)

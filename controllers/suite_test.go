@@ -74,9 +74,10 @@ var _ = BeforeSuite(func(done Done) {
 	})
 
 	err = (&ExternalServiceReconciler{
-		Client: k8sManager.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("ExternalService"),
-		Scheme: scheme.Scheme,
+		Client:                     k8sManager.GetClient(),
+		Log:                        ctrl.Log.WithName("controllers").WithName("ExternalService"),
+		Scheme:                     scheme.Scheme,
+		EnablePodDisruptionBudgets: true,
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
