@@ -77,7 +77,7 @@ spec:
                 type: array
               resources:
                 description: ResourceRequirements describes the compute resource requirements
-                  for gateway pods. Defaults to 100m, 50Mi, 2, 1Gi
+                  for gateway pods. Defaults to 100m, 100Mi, 2, 1Gi
                 properties:
                   claims:
                     description: "Claims lists the names of resources, defined in

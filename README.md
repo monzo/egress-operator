@@ -100,7 +100,7 @@ spec:
   maxReplicas: 10
   # optional, defaults to 50
   targetCPUUtilizationPercentage: 30
-  # optional, if not provided then defaults to 100m, 50Mi, 2, 1Gi
+  # optional, if not provided then defaults to 100m, 100Mi, 2, 1Gi
   resources:
     requests:
       cpu: 1

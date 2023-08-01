@@ -46,7 +46,7 @@ type ExternalServiceSpec struct {
 	// +optional
 	TargetCPUUtilizationPercentage *int32 `json:"targetCPUUtilizationPercentage,omitempty"`
 
-	// ResourceRequirements describes the compute resource requirements for gateway pods. Defaults to 100m, 50Mi, 2, 1Gi
+	// ResourceRequirements describes the compute resource requirements for gateway pods. Defaults to 100m, 100Mi, 2, 1Gi
 	// +optional
 	Resources *v1.ResourceRequirements `json:"resources,omitempty"`
 
