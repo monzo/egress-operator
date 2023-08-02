@@ -98,7 +98,7 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 		resources = corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
 				"cpu":    resource.MustParse("100m"),
-				"memory": resource.MustParse("100Mi"),
+				"memory": resource.MustParse("50Mi"),
 			},
 			Limits: corev1.ResourceList{
 				"cpu":    resource.MustParse("2"),
