@@ -71,6 +71,8 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 		img = i
 	}
 
+	labelSelector := metav1.SetAsLabelSelector(labelsToSelect(es))
+
 	var tolerations []corev1.Toleration
 	tk, kok := os.LookupEnv("TAINT_TOLERATION_KEY")
 	tv, vok := os.LookupEnv("TAINT_TOLERATION_VALUE")
@@ -88,6 +90,47 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 	if kok && vok {
 		nodeSelector = map[string]string{
 			nk: nv,
+		}
+	}
+
+	var podTopologySpread []corev1.TopologySpreadConstraint
+	topologyEnable, _ := os.LookupEnv("ENABLE_POD_TOPOLOGY_SPREAD")
+	if topologyEnable == "true" {
+		zoneSkew, zoneEnabled := os.LookupEnv("POD_TOPOLOGY_ZONE_MAX_SKEW")
+		zoneKey, zoneKeyFound := os.LookupEnv("POD_TOPOLOGY_ZONE_MAX_SKEW_KEY")
+		if zoneEnabled {
+			maxSkew, err := strconv.Atoi(zoneSkew)
+			if err != nil {
+				maxSkew = 1
+			}
+			// Default zone key to the Kubernetes topology one if not specified
+			if !zoneKeyFound {
+				zoneKey = "topology.kubernetes.io/zone"
+			}
+			podTopologySpread = append(podTopologySpread, corev1.TopologySpreadConstraint{
+				TopologyKey:       zoneKey,
+				WhenUnsatisfiable: corev1.ScheduleAnyway,
+				MaxSkew:           int32(maxSkew),
+				LabelSelector:     labelSelector,
+			})
+		}
+		hostnameSkew, hostnameEnabled := os.LookupEnv("POD_TOPOLOGY_HOSTNAME_MAX_SKEW")
+		hostnameKey, hostnameKeyFound := os.LookupEnv("POD_TOPOLOGY_HOSTNAME_MAX_SKEW_KEY")
+		if hostnameEnabled {
+			maxSkew, err := strconv.Atoi(hostnameSkew)
+			if err != nil {
+				maxSkew = 1
+			}
+			// Default zone key to the Kubernetes topology one if not specified
+			if !hostnameKeyFound {
+				hostnameKey = "kubernetes.io/hostname"
+			}
+			podTopologySpread = append(podTopologySpread, corev1.TopologySpreadConstraint{
+				TopologyKey:       hostnameKey,
+				WhenUnsatisfiable: corev1.ScheduleAnyway,
+				MaxSkew:           int32(maxSkew),
+				LabelSelector:     labelSelector,
+			})
 		}
 	}
 
@@ -124,15 +167,16 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 					MaxSurge:       intstr.ValueOrDefault(nil, intstr.FromString("25%")),
 				},
 			},
-			Selector: metav1.SetAsLabelSelector(labelsToSelect(es)),
+			Selector: labelSelector,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      labels(es),
 					Annotations: a,
 				},
 				Spec: corev1.PodSpec{
-					Tolerations:  tolerations,
-					NodeSelector: nodeSelector,
+					Tolerations:               tolerations,
+					NodeSelector:              nodeSelector,
+					TopologySpreadConstraints: podTopologySpread,
 					Containers: []corev1.Container{
 						{
 							Name:            "gateway",
