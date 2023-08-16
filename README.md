@@ -171,10 +171,46 @@ spec:
   ...
 ```
 
-| Variable name          | Default                           | Description                                        |
-| ---------------------- | --------------------------------- | -------------------------------------------------- |
-| ENVOY_IMAGE            | `envoyproxy/envoy-alpine:v1.16.5` | Name of the Envoy Proxy image to use               |
-| TAINT_TOLERATION_KEY   | Empty, no tolerations applied     | Toleration key to apply to gateway pods            |
-| TAINT_TOLERATION_VALUE | Empty, no tolerations applied     | Toleration value to apply to gateway pods          |
-| NODE_SELECTOR_KEY      | Empty, no node selector added     | Node selector label key to apply to gateway pods   |
-| NODE_SELECTOR_VALUE    | Empty, no node selector added     | Node selector label value to apply to gateway pods |
+**You can also configure the [pod topology spread constraint](https://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/)**
+
+```yaml
+env:
+- name: ENABLE_POD_TOPOLOGY_SPREAD
+  value: "true"
+- name: POD_TOPOLOGY_ZONE_MAX_SKEW
+  value: 1
+- name: POD_TOPOLOGY_HOSTNAME_MAX_SKEW
+  value: 1
+```
+
+This will inject a topology spread constraint into the gateway pods, which will
+ensure that pods are spread across zones and hosts.
+
+```yaml
+spec:
+  topologySpreadConstraints:
+    - labelSelector:
+        matchLabels:
+          app: egress-gateway
+          egress.monzo.com/gateway: egress-gateway-name
+      maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: ScheduleAnyway
+    - labelSelector:
+        matchLabels:
+          app: egress-gateway
+          egress.monzo.com/gateway: egress-gateway-name
+```
+
+| Variable name                      | Default                                   | Description                                        |
+|------------------------------------|-------------------------------------------|----------------------------------------------------|
+| ENVOY_IMAGE                        | `envoyproxy/envoy-alpine:v1.16.5`         | Name of the Envoy Proxy image to use               |
+| TAINT_TOLERATION_KEY               | Empty, no tolerations applied             | Toleration key to apply to gateway pods            |
+| TAINT_TOLERATION_VALUE             | Empty, no tolerations applied             | Toleration value to apply to gateway pods          |
+| NODE_SELECTOR_KEY                  | Empty, no node selector added             | Node selector label key to apply to gateway pods   |
+| NODE_SELECTOR_VALUE                | Empty, no node selector added             | Node selector label value to apply to gateway pods |
+| POD_TOPOLOGY_ZONE_MAX_SKEW_KEY     | `topology.kubernetes.io/zone`             | Topology key for the zone constraint               |
+| POD_TOPOLOGY_ZONE_MAX_SKEW         | Empty, won't inject a zone constraint     | Value of maxSkew for the zone constraint           |
+| POD_TOPOLOGY_HOSTNAME_MAX_SKEW_KEY | `kubernetes.io/hostname`                  | Topology key for the hostname constraint           |
+| POD_TOPOLOGY_HOSTNAME_MAX_SKEW     | Empty, won't inject a hostname constraint | Value of maxSkew for the hostname constraint       |
+
