@@ -66,7 +66,7 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 	a["egress.monzo.com/config-hash"] = configHash
 	a["egress.monzo.com/admin-port"] = strconv.Itoa(int(adPort))
 
-	img := "envoyproxy/envoy-alpine:v1.25.5"
+	img := "envoyproxy/envoy:v1.25.9"
 	if i, ok := os.LookupEnv("ENVOY_IMAGE"); ok {
 		img = i
 	}
