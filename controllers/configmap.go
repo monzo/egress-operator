@@ -16,6 +16,7 @@ import (
 	aggregatev3 "github.com/envoyproxy/go-control-plane/envoy/extensions/clusters/aggregate/v3"
 	tcpproxyv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/tcp_proxy/v3"
 	udpproxyv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/udp/udp_proxy/v3"
+	"github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"github.com/golang/protobuf/jsonpb"
@@ -169,6 +170,20 @@ func envoyConfig(es *egressv1.ExternalService) (string, error) {
 			// Prepend to list
 			clusters = append([]*envoyv3.Cluster{aggregateCluster}, clusters...)
 			clusterNameForListener = aggregateCluster.Name
+		}
+
+		if es.Spec.EnvoyClusterMaxConnections != nil {
+			cbs := &envoyv3.CircuitBreakers{
+				Thresholds: []*envoyv3.CircuitBreakers_Thresholds{
+					{
+						MaxConnections: &wrappers.UInt32Value{Value: *es.Spec.EnvoyClusterMaxConnections},
+					},
+				},
+				PerHostThresholds: nil,
+			}
+			for _, cluster := range clusters {
+				cluster.CircuitBreakers = cbs
+			}
 		}
 
 		var listener *envoylistener.Listener

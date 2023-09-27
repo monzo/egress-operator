@@ -57,6 +57,11 @@ type ExternalServiceSpec struct {
 	// When set allows overwriting the A records of the DNS being overridden.
 	// +optional
 	IpOverride []string `json:"ipOverride,omitempty"`
+
+	// The maximum number of connections that Envoy will establish to all hosts in an upstream cluster (defaults to 1024).
+	// If this circuit breaker overflows the upstream_cx_overflow counter for the cluster will increment.
+	// +optional
+	EnvoyClusterMaxConnections *uint32 `json:"envoyClusterMaxConnections,omitempty"`
 }
 
 type ExternalServicePort struct {
