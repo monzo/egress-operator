@@ -6,7 +6,6 @@ import (
 	egressv1 "github.com/monzo/egress-operator/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
-	v1 "k8s.io/api/networking/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -21,7 +20,7 @@ func (r *ExternalServiceReconciler) reconcileNetworkPolicy(ctx context.Context, 
 	if err := ctrl.SetControllerReference(es, desired, r.Scheme); err != nil {
 		return err
 	}
-	np := &v1.NetworkPolicy{}
+	np := &networkingv1.NetworkPolicy{}
 	if err := r.Get(ctx, req.NamespacedName, np); err != nil {
 		if apierrs.IsNotFound(err) {
 			return r.Client.Create(ctx, desired)
