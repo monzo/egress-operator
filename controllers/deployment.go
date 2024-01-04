@@ -98,6 +98,7 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 	if topologyEnable == "true" {
 		zoneSkew, zoneEnabled := os.LookupEnv("POD_TOPOLOGY_ZONE_MAX_SKEW")
 		zoneKey, zoneKeyFound := os.LookupEnv("POD_TOPOLOGY_ZONE_MAX_SKEW_KEY")
+		zoneWhenUnsatisfiable, zoneWhenUnsatisfiableFound := os.LookupEnv("POD_TOPOLOGY_ZONE_WHEN_UNSATISFIABLE")
 		if zoneEnabled {
 			maxSkew, err := strconv.Atoi(zoneSkew)
 			if err != nil {
@@ -107,15 +108,19 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 			if !zoneKeyFound {
 				zoneKey = "topology.kubernetes.io/zone"
 			}
+			if !zoneWhenUnsatisfiableFound {
+				zoneWhenUnsatisfiable = string(corev1.ScheduleAnyway)
+			}
 			podTopologySpread = append(podTopologySpread, corev1.TopologySpreadConstraint{
 				TopologyKey:       zoneKey,
-				WhenUnsatisfiable: corev1.ScheduleAnyway,
+				WhenUnsatisfiable: corev1.UnsatisfiableConstraintAction(zoneWhenUnsatisfiable),
 				MaxSkew:           int32(maxSkew),
 				LabelSelector:     labelSelector,
 			})
 		}
 		hostnameSkew, hostnameEnabled := os.LookupEnv("POD_TOPOLOGY_HOSTNAME_MAX_SKEW")
 		hostnameKey, hostnameKeyFound := os.LookupEnv("POD_TOPOLOGY_HOSTNAME_MAX_SKEW_KEY")
+		hostnameWhenUnsatisfiable, hostnameWhenUnsatisfiableFound := os.LookupEnv("POD_TOPOLOGY_HOSTNAME_WHEN_UNSATISFIABLE")
 		if hostnameEnabled {
 			maxSkew, err := strconv.Atoi(hostnameSkew)
 			if err != nil {
@@ -125,9 +130,12 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 			if !hostnameKeyFound {
 				hostnameKey = "kubernetes.io/hostname"
 			}
+			if !hostnameWhenUnsatisfiableFound {
+				hostnameWhenUnsatisfiable = string(corev1.ScheduleAnyway)
+			}
 			podTopologySpread = append(podTopologySpread, corev1.TopologySpreadConstraint{
 				TopologyKey:       hostnameKey,
-				WhenUnsatisfiable: corev1.ScheduleAnyway,
+				WhenUnsatisfiable: corev1.UnsatisfiableConstraintAction(hostnameWhenUnsatisfiable),
 				MaxSkew:           int32(maxSkew),
 				LabelSelector:     labelSelector,
 			})
