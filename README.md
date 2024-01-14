@@ -1,4 +1,5 @@
 # egress-operator
+
 An operator to produce egress gateway pods and control access to them with network policies, and a coredns plugin to route egress traffic to these pods.
 
 The idea is that instead of authorizing egress traffic with protocol inspection,
@@ -6,10 +7,11 @@ you instead create a internal clusterIP for every external service you use, lock
 it down to only a few pods via a network policy, and then set up your dns server
 to resolve the external service to that clusterIP.
 
-Built with kubebuilder: https://book.kubebuilder.io/
+Built with kubebuilder: <https://book.kubebuilder.io/>
 
 The operator accepts ExternalService objects, which aren't namespaced, which define a dns name and ports for an external service.
 In the `egress-operator-system` namespace, it creates:
+
 - An envoy configmap for a TCP/UDP proxy to that service (UDP not working until the next envoy release that enables it)
 - A deployment for some envoy pods with that config
 - A horizontal pod autoscaler to keep the deployment correctly sized
@@ -31,6 +33,7 @@ In the `egress-operator-system` namespace, it creates:
 ```bash
 make run
 ```
+
 This creates an ExternalService object to see the controller-manager creating managed resources in the remote cluster.
 
 ### Setting up CoreDNS plugin
@@ -38,17 +41,20 @@ This creates an ExternalService object to see the controller-manager creating ma
 The CoreDNS plugin rewrites responses for external service hostnames managed by egress-operator.
 
 Build a CoreDNS image which contains the plugin:
+
 ```bash
 cd coredns-plugin
 make docker-build docker-push IMG=yourrepo/egress-operator-coredns:latest
 ```
 
 You'll need to swap out the image of your coredns kubedns Deployment for `yourrepo/egress-operator-coredns:latest`:
+
 ```bash
 kubectl edit deploy coredns -n kube-system   # Your Deployment name may vary
 ```
 
 And edit the coredns Corefile in ConfigMap to put in `egressoperator egress-operator-system cluster.local`:
+
 ```bash
 kubectl edit configmap coredns-config -n kube-system   # Your ConfigMap name may vary
 ```
@@ -202,15 +208,16 @@ spec:
           egress.monzo.com/gateway: egress-gateway-name
 ```
 
-| Variable name                      | Default                                   | Description                                        |
-|------------------------------------|-------------------------------------------|----------------------------------------------------|
-| ENVOY_IMAGE                        | `envoyproxy/envoy-alpine:v1.16.5`         | Name of the Envoy Proxy image to use               |
-| TAINT_TOLERATION_KEY               | Empty, no tolerations applied             | Toleration key to apply to gateway pods            |
-| TAINT_TOLERATION_VALUE             | Empty, no tolerations applied             | Toleration value to apply to gateway pods          |
-| NODE_SELECTOR_KEY                  | Empty, no node selector added             | Node selector label key to apply to gateway pods   |
-| NODE_SELECTOR_VALUE                | Empty, no node selector added             | Node selector label value to apply to gateway pods |
-| POD_TOPOLOGY_ZONE_MAX_SKEW_KEY     | `topology.kubernetes.io/zone`             | Topology key for the zone constraint               |
-| POD_TOPOLOGY_ZONE_MAX_SKEW         | Empty, won't inject a zone constraint     | Value of maxSkew for the zone constraint           |
-| POD_TOPOLOGY_HOSTNAME_MAX_SKEW_KEY | `kubernetes.io/hostname`                  | Topology key for the hostname constraint           |
-| POD_TOPOLOGY_HOSTNAME_MAX_SKEW     | Empty, won't inject a hostname constraint | Value of maxSkew for the hostname constraint       |
-
+| Variable name                      | Default                                   | Description                                             |
+| ---------------------------------- | ----------------------------------------- | ------------------------------------------------------- |
+| ENVOY_IMAGE                        | `envoyproxy/envoy-alpine:v1.16.5`         | Name of the Envoy Proxy image to use                    |
+| TAINT_TOLERATION_KEY               | Empty, no tolerations applied             | Toleration key to apply to gateway pods                 |
+| TAINT_TOLERATION_VALUE             | Empty, no tolerations applied             | Toleration value to apply to gateway pods               |
+| NODE_SELECTOR_KEY                  | Empty, no node selector added             | Node selector label key to apply to gateway pods        |
+| NODE_SELECTOR_VALUE                | Empty, no node selector added             | Node selector label value to apply to gateway pods      |
+| POD_TOPOLOGY_ZONE_MAX_SKEW_KEY     | `topology.kubernetes.io/zone`             | Topology key for the zone constraint                    |
+| POD_TOPOLOGY_ZONE_MAX_SKEW         | Empty, won't inject a zone constraint     | Value of maxSkew for the zone constraint                |
+| POD_TOPOLOGY_HOSTNAME_MAX_SKEW_KEY | `kubernetes.io/hostname`                  | Topology key for the hostname constraint                |
+| POD_TOPOLOGY_HOSTNAME_MAX_SKEW     | Empty, won't inject a hostname constraint | Value of maxSkew for the hostname constraint            |
+| ROLLING_UPDATE_MAX_UNAVAILABLE     | 25%                                       | Rolling Update max unavailable to apply to gateway pods |
+| ROLLING_UPDATE_MAX_SURGE           | 25%                                       | Rolling Update max surge to apply to gateway pods       |
