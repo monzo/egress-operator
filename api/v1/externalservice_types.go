@@ -62,6 +62,10 @@ type ExternalServiceSpec struct {
 	// If this circuit breaker overflows the upstream_cx_overflow counter for the cluster will increment.
 	// +optional
 	EnvoyClusterMaxConnections *uint32 `json:"envoyClusterMaxConnections,omitempty"`
+
+	// Provides a way to override the global default
+	// +optional
+	ServiceTopologyMode string `json:"serviceTopologyMode,omitempty"`
 }
 
 type ExternalServicePort struct {

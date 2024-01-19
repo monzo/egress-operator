@@ -18,9 +18,9 @@ package controllers
 import (
 	"bytes"
 	"context"
+	"os"
 
 	"github.com/go-logr/logr"
-	egressv1 "github.com/monzo/egress-operator/api/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -29,6 +29,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	egressv1 "github.com/monzo/egress-operator/api/v1"
 )
 
 const namespace = "egress-operator-system"
@@ -106,9 +108,19 @@ func labels(es *egressv1.ExternalService) map[string]string {
 }
 
 func annotations(es *egressv1.ExternalService) map[string]string {
-	return map[string]string{
+	annotations := map[string]string{
 		"egress.monzo.com/dns-name": es.Spec.DnsName,
 	}
+	// Allow setting the topology aware routing annotation
+	value, ok := os.LookupEnv("ENABLE_SERVICE_TOPOLOGY_MODE")
+	if ok && value == "true" {
+		if es.Spec.ServiceTopologyMode != "" {
+			annotations["service.kubernetes.io/topology-mode"] = es.Spec.ServiceTopologyMode
+		} else {
+			annotations["service.kubernetes.io/topology-mode"] = "Auto"
+		}
+	}
+	return annotations
 }
 
 func labelsToSelect(es *egressv1.ExternalService) map[string]string {
