@@ -202,15 +202,22 @@ spec:
           egress.monzo.com/gateway: egress-gateway-name
 ```
 
-| Variable name                      | Default                                   | Description                                        |
-|------------------------------------|-------------------------------------------|----------------------------------------------------|
-| ENVOY_IMAGE                        | `envoyproxy/envoy-alpine:v1.16.5`         | Name of the Envoy Proxy image to use               |
-| TAINT_TOLERATION_KEY               | Empty, no tolerations applied             | Toleration key to apply to gateway pods            |
-| TAINT_TOLERATION_VALUE             | Empty, no tolerations applied             | Toleration value to apply to gateway pods          |
-| NODE_SELECTOR_KEY                  | Empty, no node selector added             | Node selector label key to apply to gateway pods   |
-| NODE_SELECTOR_VALUE                | Empty, no node selector added             | Node selector label value to apply to gateway pods |
-| POD_TOPOLOGY_ZONE_MAX_SKEW_KEY     | `topology.kubernetes.io/zone`             | Topology key for the zone constraint               |
-| POD_TOPOLOGY_ZONE_MAX_SKEW         | Empty, won't inject a zone constraint     | Value of maxSkew for the zone constraint           |
-| POD_TOPOLOGY_HOSTNAME_MAX_SKEW_KEY | `kubernetes.io/hostname`                  | Topology key for the hostname constraint           |
-| POD_TOPOLOGY_HOSTNAME_MAX_SKEW     | Empty, won't inject a hostname constraint | Value of maxSkew for the hostname constraint       |
+You can also setup services to have their endpoints aware of network topologies with [topology aware routing](https://kubernetes.io/docs/concepts/services-networking/topology-aware-routing/).
 
+If you set the environment variable `ENABLE_SERVICE_TOPOLOGY_MODE="true"` this will enable setting the annotations `service.kubernetes.io/topology-mode="auto"`.
+
+If you turn this on you can also set `spec.serviceTopologyMode` to any value if you want to disable this for particular egress'. For example
+if you set `spec.serviceTopologyMode: "None"` this will disable topology aware routing for your ExternalService.
+
+| Variable name                      | Default                                   | Description                                               |
+|------------------------------------|-------------------------------------------|-----------------------------------------------------------|
+| ENVOY_IMAGE                        | `envoyproxy/envoy-alpine:v1.16.5`         | Name of the Envoy Proxy image to use                      |
+| TAINT_TOLERATION_KEY               | Empty, no tolerations applied             | Toleration key to apply to gateway pods                   |
+| TAINT_TOLERATION_VALUE             | Empty, no tolerations applied             | Toleration value to apply to gateway pods                 |
+| NODE_SELECTOR_KEY                  | Empty, no node selector added             | Node selector label key to apply to gateway pods          |
+| NODE_SELECTOR_VALUE                | Empty, no node selector added             | Node selector label value to apply to gateway pods        |
+| POD_TOPOLOGY_ZONE_MAX_SKEW_KEY     | `topology.kubernetes.io/zone`             | Topology key for the zone constraint                      |
+| POD_TOPOLOGY_ZONE_MAX_SKEW         | Empty, won't inject a zone constraint     | Value of maxSkew for the zone constraint                  |
+| POD_TOPOLOGY_HOSTNAME_MAX_SKEW_KEY | `kubernetes.io/hostname`                  | Topology key for the hostname constraint                  |
+| POD_TOPOLOGY_HOSTNAME_MAX_SKEW     | Empty, won't inject a hostname constraint | Value of maxSkew for the hostname constraint              |
+| ENABLE_SERVICE_TOPOLOGY_MODE       | Empty, won't add the annotation           | Set to 'true' to add the topology mode service annotation |
