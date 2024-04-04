@@ -63,6 +63,9 @@ type ExternalServiceSpec struct {
 	// +optional
 	EnvoyClusterMaxConnections *uint32 `json:"envoyClusterMaxConnections,omitempty"`
 
+	// Additional arguments passed to the Envoy proxy image
+	EnvoyArguments []string `json:"envoyArguments,omitempty"`
+
 	// Provides a way to override the global default
 	// +optional
 	ServiceTopologyMode string `json:"serviceTopologyMode,omitempty"`

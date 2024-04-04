@@ -39,6 +39,11 @@ spec:
               dnsName:
                 description: DnsName is a DNS name target for the external service
                 type: string
+              envoyArguments:
+                description:  Additional arguments passed to the Envoy proxy image
+                type: array
+                items:
+                  type: string
               envoyClusterMaxConnections:
                 description: The maximum number of connections that Envoy will establish
                   to all hosts in an upstream cluster (defaults to 1024). If this
