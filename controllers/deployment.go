@@ -20,6 +20,17 @@ import (
 
 // +kubebuilder:rbac:namespace=egress-operator-system,groups=apps,resources=deployments,verbs=get;list;watch;create;patch
 
+var validLogLevels = map[string]bool{
+	"trace":    true,
+	"debug":    true,
+	"info":     true,
+	"warning":  true,
+	"warn":     true,
+	"error":    true,
+	"critical": true,
+	"off":      true,
+}
+
 func (r *ExternalServiceReconciler) reconcileDeployment(ctx context.Context, req ctrl.Request, es *egressv1.ExternalService, configHash string) error {
 	desired := deployment(es, configHash)
 	if err := ctrl.SetControllerReference(es, desired, r.Scheme); err != nil {
@@ -245,7 +256,7 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 	}
 
 	defaultArgs := []string{"-c", "/etc/envoy/envoy.yaml"}
-	if es.Spec.EnvoyLogLevel != "" {
+	if validLogLevels[es.Spec.EnvoyLogLevel] {
 		deploymentSpec.Template.Spec.Containers[0].Args = append(defaultArgs, "--log-level", es.Spec.EnvoyLogLevel)
 	}
 
