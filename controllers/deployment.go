@@ -158,9 +158,9 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 		}
 	}
 
-	var logLevelArgs []string
+	args := []string{"-c", "/etc/envoy/envoy.yaml"}
 	if es.Spec.EnvoyLogLevel != "" {
-		logLevelArgs = []string{"--log-level", es.Spec.EnvoyLogLevel}
+		args = append(args, "--log-level", es.Spec.EnvoyLogLevel)
 	}
 
 	return &appsv1.Deployment{
@@ -194,7 +194,7 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 						{
 							Name:            "gateway",
 							Image:           img,
-							Args:            logLevelArgs,
+							Args:            args,
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							Ports:           deploymentPorts(es),
 							VolumeMounts: []corev1.VolumeMount{

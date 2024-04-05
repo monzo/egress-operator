@@ -112,7 +112,7 @@ func envoyConfig(es *egressv1.ExternalService) (string, error) {
 	for _, port := range es.Spec.Ports {
 		var dnsRefreshRate *duration.Duration
 		if es.Spec.EnvoyDnsRefreshRateS != 0 {
-			dnsRefreshRate = &durationpb.Duration{Seconds: spec.EnvoyDnsRefreshRateS}
+			dnsRefreshRate = &durationpb.Duration{Seconds: es.Spec.EnvoyDnsRefreshRateS}
 		}
 		var clusters []*envoyv3.Cluster
 		protocol := protocolToEnvoy(port.Protocol)
