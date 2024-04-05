@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"google.golang.org/protobuf/types/known/durationpb"
 	"hash/fnv"
 	"strconv"
 
@@ -109,6 +110,10 @@ func envoyConfig(es *egressv1.ExternalService) (string, error) {
 	}
 
 	for _, port := range es.Spec.Ports {
+		var dnsRefreshRate *duration.Duration
+		if es.Spec.EnvoyDnsRefreshRateS != 0 {
+			dnsRefreshRate = &durationpb.Duration{Seconds: es.Spec.EnvoyDnsRefreshRateS}
+		}
 		var clusters []*envoyv3.Cluster
 		protocol := protocolToEnvoy(port.Protocol)
 		name := fmt.Sprintf("%s_%s_%s", es.Name, envoycorev3.SocketAddress_Protocol_name[int32(protocol)], strconv.Itoa(int(port.Port)))
@@ -130,6 +135,9 @@ func envoyConfig(es *egressv1.ExternalService) (string, error) {
 					KeepaliveInterval: &wrapperspb.UInt32Value{Value: 5},
 				},
 			},
+
+			DnsRefreshRate: dnsRefreshRate,
+			RespectDnsTtl:  es.Spec.EnvoyRespectDnsTTL,
 			LoadAssignment: &envoyendpoint.ClusterLoadAssignment{
 				ClusterName: name,
 				Endpoints: []*envoyendpoint.LocalityLbEndpoints{
@@ -298,6 +306,10 @@ func configmap(es *egressv1.ExternalService) (*corev1.ConfigMap, string, error) 
 
 func generateOverrideCluster(name string, spec egressv1.ExternalServiceSpec, port egressv1.ExternalServicePort, protocol envoycorev3.SocketAddress_Protocol) *envoyv3.Cluster {
 	overrideClusterName := fmt.Sprintf("%v-override", name)
+	var dnsRefreshRate *duration.Duration
+	if spec.EnvoyDnsRefreshRateS != 0 {
+		dnsRefreshRate = &durationpb.Duration{Seconds: spec.EnvoyDnsRefreshRateS}
+	}
 	var endpoints []*envoyendpoint.LocalityLbEndpoints
 
 	for _, ip := range spec.IpOverride {
@@ -356,6 +368,9 @@ func generateOverrideCluster(name string, spec egressv1.ExternalServiceSpec, por
 			ClusterName: overrideClusterName,
 			Endpoints:   endpoints,
 		},
+
+		DnsRefreshRate: dnsRefreshRate,
+		RespectDnsTtl:  spec.EnvoyRespectDnsTTL,
 	}
 }
 

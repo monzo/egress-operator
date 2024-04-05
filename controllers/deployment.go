@@ -20,6 +20,17 @@ import (
 
 // +kubebuilder:rbac:namespace=egress-operator-system,groups=apps,resources=deployments,verbs=get;list;watch;create;patch
 
+var validLogLevels = map[string]bool{
+	"trace":    true,
+	"debug":    true,
+	"info":     true,
+	"warning":  true,
+	"warn":     true,
+	"error":    true,
+	"critical": true,
+	"off":      true,
+}
+
 func (r *ExternalServiceReconciler) reconcileDeployment(ctx context.Context, req ctrl.Request, es *egressv1.ExternalService, configHash string) error {
 	desired := deployment(es, configHash)
 	if err := ctrl.SetControllerReference(es, desired, r.Scheme); err != nil {
@@ -157,6 +168,97 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 			},
 		}
 	}
+	deploymentSpec := appsv1.DeploymentSpec{
+		ProgressDeadlineSeconds: proto.Int(600),
+		RevisionHistoryLimit:    proto.Int(10),
+		Strategy: appsv1.DeploymentStrategy{
+			Type: appsv1.RollingUpdateDeploymentStrategyType,
+			RollingUpdate: &appsv1.RollingUpdateDeployment{
+				MaxUnavailable: intstr.ValueOrDefault(nil, intstr.FromString("25%")),
+				MaxSurge:       intstr.ValueOrDefault(nil, intstr.FromString("25%")),
+			},
+		},
+		Selector: labelSelector,
+		Template: corev1.PodTemplateSpec{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels:      labels(es),
+				Annotations: a,
+			},
+			Spec: corev1.PodSpec{
+				Tolerations:               tolerations,
+				NodeSelector:              nodeSelector,
+				TopologySpreadConstraints: podTopologySpread,
+				Containers: []corev1.Container{
+					{
+						Name:            "gateway",
+						Image:           img,
+						ImagePullPolicy: corev1.PullIfNotPresent,
+						Ports:           deploymentPorts(es),
+						VolumeMounts: []corev1.VolumeMount{
+							{
+								Name:      "envoy-config",
+								MountPath: "/etc/envoy",
+							},
+						},
+						// Copying istio; don't try drain outbound listeners, but after going into terminating state,
+						// wait 25 seconds for connections to naturally close before going ahead with stop.
+						Lifecycle: &corev1.Lifecycle{
+							PreStop: &corev1.LifecycleHandler{
+								Exec: &corev1.ExecAction{
+									Command: []string{"/bin/sleep", "25"},
+								},
+							},
+						},
+						TerminationMessagePath:   corev1.TerminationMessagePathDefault,
+						TerminationMessagePolicy: corev1.TerminationMessageReadFile,
+						ReadinessProbe: &corev1.Probe{
+							ProbeHandler: corev1.ProbeHandler{
+								HTTPGet: &corev1.HTTPGetAction{
+									Path:   "/ready",
+									Port:   intstr.FromInt(int(adPort)),
+									Scheme: corev1.URISchemeHTTP,
+								},
+							},
+							FailureThreshold: 3,
+							PeriodSeconds:    10,
+							SuccessThreshold: 1,
+							TimeoutSeconds:   1,
+						},
+						Resources: resources,
+						Env: []corev1.EnvVar{
+							{
+								Name:  "ENVOY_UID",
+								Value: "0",
+							},
+						},
+					},
+				},
+				RestartPolicy:                 corev1.RestartPolicyAlways,
+				SchedulerName:                 corev1.DefaultSchedulerName,
+				SecurityContext:               &corev1.PodSecurityContext{},
+				TerminationGracePeriodSeconds: proto.Int64(30),
+				DNSPolicy:                     corev1.DNSDefault,
+				Volumes: []corev1.Volume{
+					{
+						Name: "envoy-config",
+						VolumeSource: corev1.VolumeSource{
+							ConfigMap: &corev1.ConfigMapVolumeSource{
+								DefaultMode: proto.Int(420),
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: es.Name,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	defaultArgs := []string{"-c", "/etc/envoy/envoy.yaml"}
+	if validLogLevels[es.Spec.EnvoyLogLevel] {
+		deploymentSpec.Template.Spec.Containers[0].Args = append(defaultArgs, "--log-level", es.Spec.EnvoyLogLevel)
+	}
 
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -165,91 +267,6 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 			Labels:      labels(es),
 			Annotations: annotations(es),
 		},
-		Spec: appsv1.DeploymentSpec{
-			ProgressDeadlineSeconds: proto.Int(600),
-			RevisionHistoryLimit:    proto.Int(10),
-			Strategy: appsv1.DeploymentStrategy{
-				Type: appsv1.RollingUpdateDeploymentStrategyType,
-				RollingUpdate: &appsv1.RollingUpdateDeployment{
-					MaxUnavailable: intstr.ValueOrDefault(nil, intstr.FromString("25%")),
-					MaxSurge:       intstr.ValueOrDefault(nil, intstr.FromString("25%")),
-				},
-			},
-			Selector: labelSelector,
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels:      labels(es),
-					Annotations: a,
-				},
-				Spec: corev1.PodSpec{
-					Tolerations:               tolerations,
-					NodeSelector:              nodeSelector,
-					TopologySpreadConstraints: podTopologySpread,
-					Containers: []corev1.Container{
-						{
-							Name:            "gateway",
-							Image:           img,
-							ImagePullPolicy: corev1.PullIfNotPresent,
-							Ports:           deploymentPorts(es),
-							VolumeMounts: []corev1.VolumeMount{
-								{
-									Name:      "envoy-config",
-									MountPath: "/etc/envoy",
-								},
-							},
-							// Copying istio; don't try drain outbound listeners, but after going into terminating state,
-							// wait 25 seconds for connections to naturally close before going ahead with stop.
-							Lifecycle: &corev1.Lifecycle{
-								PreStop: &corev1.LifecycleHandler{
-									Exec: &corev1.ExecAction{
-										Command: []string{"/bin/sleep", "25"},
-									},
-								},
-							},
-							TerminationMessagePath:   corev1.TerminationMessagePathDefault,
-							TerminationMessagePolicy: corev1.TerminationMessageReadFile,
-							ReadinessProbe: &corev1.Probe{
-								ProbeHandler: corev1.ProbeHandler{
-									HTTPGet: &corev1.HTTPGetAction{
-										Path:   "/ready",
-										Port:   intstr.FromInt(int(adPort)),
-										Scheme: corev1.URISchemeHTTP,
-									},
-								},
-								FailureThreshold: 3,
-								PeriodSeconds:    10,
-								SuccessThreshold: 1,
-								TimeoutSeconds:   1,
-							},
-							Resources: resources,
-							Env: []corev1.EnvVar{
-								{
-									Name:  "ENVOY_UID",
-									Value: "0",
-								},
-							},
-						},
-					},
-					RestartPolicy:                 corev1.RestartPolicyAlways,
-					SchedulerName:                 corev1.DefaultSchedulerName,
-					SecurityContext:               &corev1.PodSecurityContext{},
-					TerminationGracePeriodSeconds: proto.Int64(30),
-					DNSPolicy:                     corev1.DNSDefault,
-					Volumes: []corev1.Volume{
-						{
-							Name: "envoy-config",
-							VolumeSource: corev1.VolumeSource{
-								ConfigMap: &corev1.ConfigMapVolumeSource{
-									DefaultMode: proto.Int(420),
-									LocalObjectReference: corev1.LocalObjectReference{
-										Name: es.Name,
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
+		Spec: deploymentSpec,
 	}
 }
