@@ -158,6 +158,11 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 		}
 	}
 
+	var logLevelArgs []string
+	if es.Spec.EnvoyLogLevel != "" {
+		logLevelArgs = []string{"--log-level", es.Spec.EnvoyLogLevel}
+	}
+
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        es.Name,
@@ -189,7 +194,7 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 						{
 							Name:            "gateway",
 							Image:           img,
-							Args:            es.Spec.EnvoyArguments,
+							Args:            logLevelArgs,
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							Ports:           deploymentPorts(es),
 							VolumeMounts: []corev1.VolumeMount{

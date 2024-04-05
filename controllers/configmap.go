@@ -356,6 +356,9 @@ func generateOverrideCluster(name string, spec egressv1.ExternalServiceSpec, por
 			ClusterName: overrideClusterName,
 			Endpoints:   endpoints,
 		},
+
+		DnsRefreshRate: spec.EnvoyDnsRefreshRate,
+		RespectDnsTtl:  spec.EnvoyRespectDnsTTL,
 	}
 }
 
