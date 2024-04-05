@@ -181,7 +181,6 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 					{
 						Name:            "gateway",
 						Image:           img,
-						Args:            args,
 						ImagePullPolicy: corev1.PullIfNotPresent,
 						Ports:           deploymentPorts(es),
 						VolumeMounts: []corev1.VolumeMount{
