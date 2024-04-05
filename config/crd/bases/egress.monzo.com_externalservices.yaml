@@ -39,11 +39,19 @@ spec:
               dnsName:
                 description: DnsName is a DNS name target for the external service
                 type: string
-              envoyArguments:
-                description:  Additional arguments passed to the Envoy proxy image
-                type: array
-                items:
-                  type: string
+              envoyLogLevel:
+                description:  Input to the --log-level command line option. See the help text for the available log levels and the default.
+                type: string
+              envoyDnsRefreshRate:
+                description: | 
+                  Corresponds to Envoy's dns_refresh_rate config field for this cluster.
+                  See	https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/cluster/v3/cluster.proto
+                type: string
+              envoyRespectDnsTTL:
+                description: |
+                  Corresponds to Envoy's respect_dns_ttl config field for this cluster.
+                  See	https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/cluster/v3/cluster.proto
+                type: boolean
               envoyClusterMaxConnections:
                 description: The maximum number of connections that Envoy will establish
                   to all hosts in an upstream cluster (defaults to 1024). If this
