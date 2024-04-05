@@ -42,11 +42,11 @@ spec:
               envoyLogLevel:
                 description:  Input to the --log-level command line option. See the help text for the available log levels and the default.
                 type: string
-              envoyDnsRefreshRate:
+              envoyDnsRefreshRateS:
                 description: | 
-                  Corresponds to Envoy's dns_refresh_rate config field for this cluster.
+                  Corresponds to Envoy's dns_refresh_rate config field for this cluster, in seconds
                   See	https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/cluster/v3/cluster.proto
-                type: string
+                type: number
               envoyRespectDnsTTL:
                 description: |
                   Corresponds to Envoy's respect_dns_ttl config field for this cluster.

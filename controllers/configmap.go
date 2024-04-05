@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"google.golang.org/protobuf/types/known/durationpb"
 	"hash/fnv"
 	"strconv"
 
@@ -298,6 +299,10 @@ func configmap(es *egressv1.ExternalService) (*corev1.ConfigMap, string, error) 
 
 func generateOverrideCluster(name string, spec egressv1.ExternalServiceSpec, port egressv1.ExternalServicePort, protocol envoycorev3.SocketAddress_Protocol) *envoyv3.Cluster {
 	overrideClusterName := fmt.Sprintf("%v-override", name)
+	var dnsRefreshRate *duration.Duration
+	if spec.EnvoyDnsRefreshRateS != 0 {
+		dnsRefreshRate = &durationpb.Duration{Seconds: spec.EnvoyDnsRefreshRateS}
+	}
 	var endpoints []*envoyendpoint.LocalityLbEndpoints
 
 	for _, ip := range spec.IpOverride {
@@ -357,7 +362,7 @@ func generateOverrideCluster(name string, spec egressv1.ExternalServiceSpec, por
 			Endpoints:   endpoints,
 		},
 
-		DnsRefreshRate: spec.EnvoyDnsRefreshRate,
+		DnsRefreshRate: dnsRefreshRate,
 		RespectDnsTtl:  spec.EnvoyRespectDnsTTL,
 	}
 }

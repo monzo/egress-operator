@@ -16,7 +16,6 @@ limitations under the License.
 package v1
 
 import (
-	"github.com/golang/protobuf/ptypes/duration"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -67,10 +66,10 @@ type ExternalServiceSpec struct {
 	// Input to the --log-level command line option. See the help text for the available log levels and the default.
 	EnvoyLogLevel string `json:"envoyArguments,omitempty"`
 
-	// Corresponds to Envoy's dns_refresh_rate config field for this cluster.
+	// Corresponds to Envoy's dns_refresh_rate config field for this cluster, in seconds
 	// See	https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/cluster/v3/cluster.proto
 	// +optional
-	EnvoyDnsRefreshRate *duration.Duration `json:"envoy_dns_refresh_rate,omitempty"`
+	EnvoyDnsRefreshRateS int64 `json:"envoy_dns_refresh_rate,omitempty"`
 
 	// Corresponds to Envoy's respect_dns_ttl config field for this cluster.
 	// See	https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/cluster/v3/cluster.proto
