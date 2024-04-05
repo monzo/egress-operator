@@ -64,17 +64,17 @@ type ExternalServiceSpec struct {
 	EnvoyClusterMaxConnections *uint32 `json:"envoyClusterMaxConnections,omitempty"`
 
 	// Input to the --log-level command line option. See the help text for the available log levels and the default.
-	EnvoyLogLevel string `json:"envoyArguments,omitempty"`
+	EnvoyLogLevel string `json:"envoyLogLevel,omitempty"`
 
 	// Corresponds to Envoy's dns_refresh_rate config field for this cluster, in seconds
 	// See	https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/cluster/v3/cluster.proto
 	// +optional
-	EnvoyDnsRefreshRateS int64 `json:"envoy_dns_refresh_rate,omitempty"`
+	EnvoyDnsRefreshRateS int64 `json:"envoyDnsRefreshRateS,omitempty"`
 
 	// Corresponds to Envoy's respect_dns_ttl config field for this cluster.
 	// See	https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/cluster/v3/cluster.proto
 	// +optional
-	EnvoyRespectDnsTTL bool `json:"envoy_respect_dns_ttl,omitempty"`
+	EnvoyRespectDnsTTL bool `json:"envoyRespectDnsTTL,omitempty"`
 
 	// Provides a way to override the global default
 	// +optional
