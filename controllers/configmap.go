@@ -230,9 +230,8 @@ func envoyConfig(es *egressv1.ExternalService) (string, error) {
 						Format: &envoycorev3.SubstitutionFormatString_JsonFormat{
 							JsonFormat: logFields,
 						},
-						OmitEmptyValues:   true,
-						ContentType:       "application/json; charset=UTF-8",
-						JsonFormatOptions: nil,
+						OmitEmptyValues: true,
+						ContentType:     "application/json; charset=UTF-8",
 					},
 				},
 			})
