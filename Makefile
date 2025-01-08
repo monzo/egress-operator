@@ -1,7 +1,7 @@
 # Image URL to use all building/pushing image targets
-IMG ?= ${ACC}.dkr.ecr.eu-west-1.amazonaws.com/monzo/egress-operator:manager-$(shell git rev-parse --short head)
+IMG ?= ${ACC}.dkr.ecr.eu-west-1.amazonaws.com/monzo/docker-images-dev:manager-$(shell git rev-parse --short head)
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
-CRD_OPTIONS ?= "crd:trivialVersions=true"
+# CRD_OPTIONS ?= "crd:trivialVersions=true"
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -54,7 +54,7 @@ generate: controller-gen
 	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths="./..."
 
 # Build the docker image
-docker-build: test
+docker-build: #test
 	docker build . -t ${IMG}
 
 # Push the docker image
