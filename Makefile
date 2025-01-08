@@ -52,7 +52,7 @@ generate: controller-gen
 	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths="./..."
 
 # Build the docker image
-docker-build: #test
+docker-build: test
 	docker buildx build . -t ${IMG} --platform=linux/amd64
 
 # Push the docker image
