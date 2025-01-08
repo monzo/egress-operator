@@ -55,7 +55,7 @@ generate: controller-gen
 
 # Build the docker image
 docker-build: #test
-	docker build . -t ${IMG}
+	docker buildx build . -t ${IMG} --platform=linux/amd64 --provenance=false
 
 # Push the docker image
 docker-push:
@@ -70,7 +70,7 @@ ifeq (, $(shell which controller-gen))
 	CONTROLLER_GEN_TMP_DIR=$$(mktemp -d) ;\
 	cd $$CONTROLLER_GEN_TMP_DIR ;\
 	go mod init tmp ;\
-	go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.4.0 ;\
+	go get sigs.k8s.io/controller-tools/cmd/controller-gen@latest ;\
 	rm -rf $$CONTROLLER_GEN_TMP_DIR ;\
 	}
 CONTROLLER_GEN=$(GOBIN)/controller-gen
