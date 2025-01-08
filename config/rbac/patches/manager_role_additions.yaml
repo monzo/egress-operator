@@ -1,0 +1,13 @@
+- op: add
+  path: /rules/0
+  value:
+    apiGroups:
+      - policy
+    resources:
+      - poddisruptionbudgets
+    verbs:
+      - create
+      - get
+      - list
+      - patch
+      - watch
