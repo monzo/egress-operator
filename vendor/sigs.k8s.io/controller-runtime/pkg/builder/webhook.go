@@ -36,17 +36,18 @@ import (
 
 // WebhookBuilder builds a Webhook.
 type WebhookBuilder struct {
-	apiType        runtime.Object
-	withDefaulter  admission.CustomDefaulter
-	withValidator  admission.CustomValidator
-	gvk            schema.GroupVersionKind
-	mgr            manager.Manager
-	config         *rest.Config
-	recoverPanic   bool
-	logConstructor func(base logr.Logger, req *admission.Request) logr.Logger
+	apiType         runtime.Object
+	customDefaulter admission.CustomDefaulter
+	customValidator admission.CustomValidator
+	gvk             schema.GroupVersionKind
+	mgr             manager.Manager
+	config          *rest.Config
+	recoverPanic    *bool
+	logConstructor  func(base logr.Logger, req *admission.Request) logr.Logger
+	err             error
 }
 
-// WebhookManagedBy allows inform its manager.Manager.
+// WebhookManagedBy returns a new webhook builder.
 func WebhookManagedBy(m manager.Manager) *WebhookBuilder {
 	return &WebhookBuilder{mgr: m}
 }
@@ -57,19 +58,22 @@ func WebhookManagedBy(m manager.Manager) *WebhookBuilder {
 // If the given object implements the admission.Defaulter interface, a MutatingWebhook will be wired for this type.
 // If the given object implements the admission.Validator interface, a ValidatingWebhook will be wired for this type.
 func (blder *WebhookBuilder) For(apiType runtime.Object) *WebhookBuilder {
+	if blder.apiType != nil {
+		blder.err = errors.New("For(...) should only be called once, could not assign multiple objects for webhook registration")
+	}
 	blder.apiType = apiType
 	return blder
 }
 
-// WithDefaulter takes a admission.WithDefaulter interface, a MutatingWebhook will be wired for this type.
+// WithDefaulter takes an admission.CustomDefaulter interface, a MutatingWebhook will be wired for this type.
 func (blder *WebhookBuilder) WithDefaulter(defaulter admission.CustomDefaulter) *WebhookBuilder {
-	blder.withDefaulter = defaulter
+	blder.customDefaulter = defaulter
 	return blder
 }
 
-// WithValidator takes a admission.WithValidator interface, a ValidatingWebhook will be wired for this type.
+// WithValidator takes a admission.CustomValidator interface, a ValidatingWebhook will be wired for this type.
 func (blder *WebhookBuilder) WithValidator(validator admission.CustomValidator) *WebhookBuilder {
-	blder.withValidator = validator
+	blder.customValidator = validator
 	return blder
 }
 
@@ -79,9 +83,10 @@ func (blder *WebhookBuilder) WithLogConstructor(logConstructor func(base logr.Lo
 	return blder
 }
 
-// RecoverPanic indicates whether the panic caused by webhook should be recovered.
-func (blder *WebhookBuilder) RecoverPanic() *WebhookBuilder {
-	blder.recoverPanic = true
+// RecoverPanic indicates whether panics caused by the webhook should be recovered.
+// Defaults to true.
+func (blder *WebhookBuilder) RecoverPanic(recoverPanic bool) *WebhookBuilder {
+	blder.recoverPanic = &recoverPanic
 	return blder
 }
 
@@ -129,12 +134,12 @@ func (blder *WebhookBuilder) registerWebhooks() error {
 		return err
 	}
 
-	// Create webhook(s) for each type
 	blder.gvk, err = apiutil.GVKForObject(typ, blder.mgr.GetScheme())
 	if err != nil {
 		return err
 	}
 
+	// Register webhook(s) for type
 	blder.registerDefaultingWebhook()
 	blder.registerValidatingWebhook()
 
@@ -142,10 +147,10 @@ func (blder *WebhookBuilder) registerWebhooks() error {
 	if err != nil {
 		return err
 	}
-	return nil
+	return blder.err
 }
 
-// registerDefaultingWebhook registers a defaulting webhook if th.
+// registerDefaultingWebhook registers a defaulting webhook if necessary.
 func (blder *WebhookBuilder) registerDefaultingWebhook() {
 	mwh := blder.getDefaultingWebhook()
 	if mwh != nil {
@@ -164,11 +169,19 @@ func (blder *WebhookBuilder) registerDefaultingWebhook() {
 }
 
 func (blder *WebhookBuilder) getDefaultingWebhook() *admission.Webhook {
-	if defaulter := blder.withDefaulter; defaulter != nil {
-		return admission.WithCustomDefaulter(blder.mgr.GetScheme(), blder.apiType, defaulter).WithRecoverPanic(blder.recoverPanic)
+	if defaulter := blder.customDefaulter; defaulter != nil {
+		w := admission.WithCustomDefaulter(blder.mgr.GetScheme(), blder.apiType, defaulter)
+		if blder.recoverPanic != nil {
+			w = w.WithRecoverPanic(*blder.recoverPanic)
+		}
+		return w
 	}
 	if defaulter, ok := blder.apiType.(admission.Defaulter); ok {
-		return admission.DefaultingWebhookFor(blder.mgr.GetScheme(), defaulter).WithRecoverPanic(blder.recoverPanic)
+		w := admission.DefaultingWebhookFor(blder.mgr.GetScheme(), defaulter)
+		if blder.recoverPanic != nil {
+			w = w.WithRecoverPanic(*blder.recoverPanic)
+		}
+		return w
 	}
 	log.Info(
 		"skip registering a mutating webhook, object does not implement admission.Defaulter or WithDefaulter wasn't called",
@@ -176,6 +189,7 @@ func (blder *WebhookBuilder) getDefaultingWebhook() *admission.Webhook {
 	return nil
 }
 
+// registerValidatingWebhook registers a validating webhook if necessary.
 func (blder *WebhookBuilder) registerValidatingWebhook() {
 	vwh := blder.getValidatingWebhook()
 	if vwh != nil {
@@ -194,11 +208,19 @@ func (blder *WebhookBuilder) registerValidatingWebhook() {
 }
 
 func (blder *WebhookBuilder) getValidatingWebhook() *admission.Webhook {
-	if validator := blder.withValidator; validator != nil {
-		return admission.WithCustomValidator(blder.mgr.GetScheme(), blder.apiType, validator).WithRecoverPanic(blder.recoverPanic)
+	if validator := blder.customValidator; validator != nil {
+		w := admission.WithCustomValidator(blder.mgr.GetScheme(), blder.apiType, validator)
+		if blder.recoverPanic != nil {
+			w = w.WithRecoverPanic(*blder.recoverPanic)
+		}
+		return w
 	}
 	if validator, ok := blder.apiType.(admission.Validator); ok {
-		return admission.ValidatingWebhookFor(blder.mgr.GetScheme(), validator).WithRecoverPanic(blder.recoverPanic)
+		w := admission.ValidatingWebhookFor(blder.mgr.GetScheme(), validator)
+		if blder.recoverPanic != nil {
+			w = w.WithRecoverPanic(*blder.recoverPanic)
+		}
+		return w
 	}
 	log.Info(
 		"skip registering a validating webhook, object does not implement admission.Validator or WithValidator wasn't called",
