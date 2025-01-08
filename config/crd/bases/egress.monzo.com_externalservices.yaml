@@ -53,6 +53,16 @@ spec:
                   for this cluster, in seconds\nSee\thttps://www.envoyproxy.io/docs/envoy/latest/api-v3/config/cluster/v3/cluster.proto"
                 format: int64
                 type: integer
+              envoyJsonAdminAccessLogs:
+                description: |-
+                  Output admin logs in JSON format as opposed to a text string.
+                  Defaults to false
+                type: boolean
+              envoyJsonClusterAccessLogs:
+                description: |-
+                  Output access logs in JSON format as opposed to a text string.
+                  Defaults to false
+                type: boolean
               envoyLogLevel:
                 description: Input to the --log-level command line option. See the
                   help text for the available log levels and the default.
