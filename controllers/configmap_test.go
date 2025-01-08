@@ -35,8 +35,8 @@ func Test_envoyConfig(t *testing.T) {
         contentType: application/json; charset=UTF-8
         omitEmptyValues: true
         textFormatSource:
-          inlineString: |
-            [%START_TIME%] "%REQ(:METHOD)% %REQ(X-ENVOY-ORIGINAL-PATH?:PATH)% %PROTOCOL%" %RESPONSE_CODE% %RESPONSE_FLAGS% %BYTES_RECEIVED% %BYTES_SENT% %DURATION% %RESP(X-ENVOY-UPSTREAM-SERVICE-TIME)% "%REQ(X-FORWARDED-FOR)%" "%REQ(USER-AGENT)%" "%REQ(X-REQUEST-ID)%" "%REQ(:AUTHORITY)%" "%UPSTREAM_HOST%"
+          inlineString: '[%START_TIME%] %BYTES_RECEIVED% %BYTES_SENT% %DURATION% "%DOWNSTREAM_REMOTE_ADDRESS%"
+            "%UPSTREAM_HOST%" "%UPSTREAM_CLUSTER%"'
   address:
     socketAddress:
       address: 0.0.0.0
@@ -101,8 +101,8 @@ staticResources:
                 contentType: application/json; charset=UTF-8
                 omitEmptyValues: true
                 textFormatSource:
-                  inlineString: |
-                    [%START_TIME%] "%REQ(:METHOD)% %REQ(X-ENVOY-ORIGINAL-PATH?:PATH)% %PROTOCOL%" %RESPONSE_CODE% %RESPONSE_FLAGS% %BYTES_RECEIVED% %BYTES_SENT% %DURATION% %RESP(X-ENVOY-UPSTREAM-SERVICE-TIME)% "%REQ(X-FORWARDED-FOR)%" "%REQ(USER-AGENT)%" "%REQ(X-REQUEST-ID)%" "%REQ(:AUTHORITY)%" "%UPSTREAM_HOST%"
+                  inlineString: '[%START_TIME%] %BYTES_RECEIVED% %BYTES_SENT% %DURATION%
+                    "%DOWNSTREAM_REMOTE_ADDRESS%" "%UPSTREAM_HOST%" "%UPSTREAM_CLUSTER%"'
           cluster: foo_UDP_100
           statPrefix: udp_proxy
     name: foo_UDP_100
@@ -123,8 +123,8 @@ staticResources:
                 contentType: application/json; charset=UTF-8
                 omitEmptyValues: true
                 textFormatSource:
-                  inlineString: |
-                    [%START_TIME%] "%REQ(:METHOD)% %REQ(X-ENVOY-ORIGINAL-PATH?:PATH)% %PROTOCOL%" %RESPONSE_CODE% %RESPONSE_FLAGS% %BYTES_RECEIVED% %BYTES_SENT% %DURATION% %RESP(X-ENVOY-UPSTREAM-SERVICE-TIME)% "%REQ(X-FORWARDED-FOR)%" "%REQ(USER-AGENT)%" "%REQ(X-REQUEST-ID)%" "%REQ(:AUTHORITY)%" "%UPSTREAM_HOST%"
+                  inlineString: '[%START_TIME%] %BYTES_RECEIVED% %BYTES_SENT% %DURATION%
+                    "%DOWNSTREAM_REMOTE_ADDRESS%" "%UPSTREAM_HOST%" "%UPSTREAM_CLUSTER%"'
           cluster: foo_TCP_101
           statPrefix: tcp_proxy
     name: foo_TCP_101
