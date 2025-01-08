@@ -3,7 +3,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	//structpb "github.com/golang/protobuf/ptypes/struct"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"hash/fnv"

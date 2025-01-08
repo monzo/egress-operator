@@ -1,11 +1,9 @@
-
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.4.0
-  creationTimestamp: null
+    controller-gen.kubebuilder.io/version: v0.17.0
   name: externalservices.egress.monzo.com
 spec:
   group: egress.monzo.com
@@ -22,14 +20,19 @@ spec:
         description: ExternalService is the Schema for the externalservices API
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
@@ -40,15 +43,14 @@ spec:
                 description: DnsName is a DNS name target for the external service
                 type: string
               envoyClusterMaxConnections:
-                description: The maximum number of connections that Envoy will establish
-                  to all hosts in an upstream cluster (defaults to 1024). If this
-                  circuit breaker overflows the upstream_cx_overflow counter for the
-                  cluster will increment.
+                description: |-
+                  The maximum number of connections that Envoy will establish to all hosts in an upstream cluster (defaults to 1024).
+                  If this circuit breaker overflows the upstream_cx_overflow counter for the cluster will increment.
                 format: int32
                 type: integer
               envoyDnsRefreshRateS:
                 description: "Corresponds to Envoy's dns_refresh_rate config field
-                  for this cluster, in seconds See\thttps://www.envoyproxy.io/docs/envoy/latest/api-v3/config/cluster/v3/cluster.proto"
+                  for this cluster, in seconds\nSee\thttps://www.envoyproxy.io/docs/envoy/latest/api-v3/config/cluster/v3/cluster.proto"
                 format: int64
                 type: integer
               envoyLogLevel:
@@ -57,12 +59,12 @@ spec:
                 type: string
               envoyRespectDnsTTL:
                 description: "Corresponds to Envoy's respect_dns_ttl config field
-                  for this cluster. See\thttps://www.envoyproxy.io/docs/envoy/latest/api-v3/config/cluster/v3/cluster.proto"
+                  for this cluster.\nSee\thttps://www.envoyproxy.io/docs/envoy/latest/api-v3/config/cluster/v3/cluster.proto"
                 type: boolean
               hijackDns:
-                description: 'If true, add a `egress.monzo.com/hijack-dns: true` label
-                  to produced Service objects CoreDNS can watch this label and decide
-                  to rewrite DnsName -> clusterIP'
+                description: |-
+                  If true, add a `egress.monzo.com/hijack-dns: true` label to produced Service objects
+                  CoreDNS can watch this label and decide to rewrite DnsName -> clusterIP
                 type: boolean
               ipOverride:
                 description: When set allows overwriting the A records of the DNS
@@ -90,8 +92,9 @@ spec:
                       format: int32
                       type: integer
                     protocol:
-                      description: The protocol (TCP or UDP) which traffic must match.
-                        If not specified, this field defaults to TCP.
+                      description: |-
+                        The protocol (TCP or UDP) which traffic must match. If not specified, this
+                        field defaults to TCP.
                       type: string
                   type: object
                 type: array
@@ -100,18 +103,28 @@ spec:
                   for gateway pods. Defaults to 100m, 50Mi, 2, 1Gi
                 properties:
                   claims:
-                    description: "Claims lists the names of resources, defined in
-                      spec.resourceClaims, that are used by this container. \n This
-                      is an alpha field and requires enabling the DynamicResourceAllocation
-                      feature gate. \n This field is immutable. It can only be set
-                      for containers."
+                    description: |-
+                      Claims lists the names of resources, defined in spec.resourceClaims,
+                      that are used by this container.
+
+                      This is an alpha field and requires enabling the
+                      DynamicResourceAllocation feature gate.
+
+                      This field is immutable. It can only be set for containers.
                     items:
                       description: ResourceClaim references one entry in PodSpec.ResourceClaims.
                       properties:
                         name:
-                          description: Name must match the name of one entry in pod.spec.resourceClaims
-                            of the Pod where this field is used. It makes that resource
-                            available inside a container.
+                          description: |-
+                            Name must match the name of one entry in pod.spec.resourceClaims of
+                            the Pod where this field is used. It makes that resource available
+                            inside a container.
+                          type: string
+                        request:
+                          description: |-
+                            Request is the name chosen for a request in the referenced claim.
+                            If empty, everything from the claim is made available, otherwise
+                            only the result of this request.
                           type: string
                       required:
                       - name
@@ -127,8 +140,9 @@ spec:
                       - type: string
                       pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                       x-kubernetes-int-or-string: true
-                    description: 'Limits describes the maximum amount of compute resources
-                      allowed. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                    description: |-
+                      Limits describes the maximum amount of compute resources allowed.
+                      More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                     type: object
                   requests:
                     additionalProperties:
@@ -137,11 +151,11 @@ spec:
                       - type: string
                       pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                       x-kubernetes-int-or-string: true
-                    description: 'Requests describes the minimum amount of compute
-                      resources required. If Requests is omitted for a container,
-                      it defaults to Limits if that is explicitly specified, otherwise
-                      to an implementation-defined value. Requests cannot exceed Limits.
-                      More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                    description: |-
+                      Requests describes the minimum amount of compute resources required.
+                      If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                      otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                      More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                     type: object
                 type: object
               serviceTopologyMode:
@@ -159,9 +173,3 @@ spec:
         type: object
     served: true
     storage: true
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []
