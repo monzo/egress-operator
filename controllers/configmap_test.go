@@ -1,9 +1,7 @@
 package controllers
 
 import (
-	bootstrap "github.com/envoyproxy/go-control-plane/envoy/config/bootstrap/v3"
 	"github.com/google/go-cmp/cmp"
-	"sigs.k8s.io/yaml"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -292,15 +290,11 @@ staticResources:
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.args.es.Spec.EnvoyClusterMaxConnections = tt.args.maxConns
-			got, _ := envoyConfig(tt.args.es)
-
-			var x bootstrap.Bootstrap
-			err := yaml.Unmarshal([]byte(got), &x)
+			got, err := envoyConfig(tt.args.es)
 			if err != nil {
-				t.Error()
+				t.Error(err)
 			}
-			if got, _ := envoyConfig(tt.args.es); got != tt.want {
-
+			if got != tt.want {
 				t.Errorf("envoyConfig() = %v, want %v", got, tt.want)
 				t.Error(cmp.Diff(got, tt.want))
 			}
