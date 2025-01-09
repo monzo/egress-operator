@@ -1,11 +1,6 @@
 # Image URL to use all building/pushing image targets
 IMG ?= ${ACC}.dkr.ecr.eu-west-1.amazonaws.com/monzo/egress-operator:manager-$(shell git rev-parse --short head)
 
-# Version of controller-gen used in the Makefile
-# See https://github.com/kubernetes-sigs/controller-tools/releases
-# The commit below references v0.17.0
-CONTROLLER_GEN_COMMIT := c71f90318f2c818b93a4458e42f7c4da416d5368
-
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
@@ -71,7 +66,7 @@ ifeq (, $(shell which controller-gen))
 	@{ \
 	set -ex ;\
 	mkdir -p bin ;\
-	GOBIN=$$(pwd)/bin go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_COMMIT) ;\
+	GOBIN=$$(pwd)/bin go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.17.0 ;\
 	}
 CONTROLLER_GEN=./bin/controller-gen
 else
