@@ -64,7 +64,10 @@ var (
 	}
 )
 
-const TextLogFormat = "[%START_TIME%] %BYTES_RECEIVED% %BYTES_SENT% %DURATION% \"%DOWNSTREAM_REMOTE_ADDRESS%\" \"%UPSTREAM_HOST%\" \"%UPSTREAM_CLUSTER%\""
+const (
+	ClusterTextLogFormat = "[%START_TIME%] %BYTES_RECEIVED% %BYTES_SENT% %DURATION% \"%DOWNSTREAM_REMOTE_ADDRESS%\" \"%UPSTREAM_HOST%\" \"%UPSTREAM_CLUSTER%\""
+	AdminTextLogFormat   = "[%START_TIME%] \"%REQ(:METHOD)% %REQ(X-ENVOY-ORIGINAL-PATH?:PATH)% %PROTOCOL%\" %RESPONSE_CODE% %RESPONSE_FLAGS% %BYTES_RECEIVED% %BYTES_SENT% %DURATION% %RESP(X-ENVOY-UPSTREAM-SERVICE-TIME)% \"%REQ(X-FORWARDED-FOR)%\" \"%REQ(USER-AGENT)%\" \"%REQ(X-REQUEST-ID)%\" \"%REQ(:AUTHORITY)%\" \"%UPSTREAM_HOST%\"\n"
+)
 
 func (r *ExternalServiceReconciler) reconcileConfigMap(ctx context.Context, req ctrl.Request, es *egressv1.ExternalService, desired *corev1.ConfigMap) error {
 	if err := ctrl.SetControllerReference(es, desired, r.Scheme); err != nil {
@@ -117,14 +120,14 @@ func adminPort(es *egressv1.ExternalService) int32 {
 	panic("couldn't find a port for admin listener")
 }
 
-func getStdoutTextAccessLog() ([]*accesslogfilterv3.AccessLog, error) {
+func getStdoutTextAccessLog(format string) ([]*accesslogfilterv3.AccessLog, error) {
 	ac, err := anypb.New(&streamv3.StdoutAccessLog{
 		AccessLogFormat: &streamv3.StdoutAccessLog_LogFormat{
 			LogFormat: &envoycorev3.SubstitutionFormatString{
 				Format: &envoycorev3.SubstitutionFormatString_TextFormatSource{
 					TextFormatSource: &envoycorev3.DataSource{
 						Specifier: &envoycorev3.DataSource_InlineString{
-							InlineString: TextLogFormat,
+							InlineString: format,
 						},
 					},
 				},
@@ -171,14 +174,14 @@ func getClusterAccessLog(es *egressv1.ExternalService) ([]*accesslogfilterv3.Acc
 	if es.Spec.JsonClusterAccessLogs {
 		return getJsonAccessLog()
 	}
-	return getStdoutTextAccessLog()
+	return getStdoutTextAccessLog(ClusterTextLogFormat)
 }
 
 func getAdminAccessLog(es *egressv1.ExternalService) ([]*accesslogfilterv3.AccessLog, error) {
 	if es.Spec.JsonAdminAccessLogs {
 		return getJsonAccessLog()
 	}
-	return getStdoutTextAccessLog()
+	return getStdoutTextAccessLog(AdminTextLogFormat)
 }
 
 func envoyConfig(es *egressv1.ExternalService) (string, error) {
