@@ -18,6 +18,9 @@ package main
 import (
 	"flag"
 	"os"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"time"
 
 	egressv1 "github.com/monzo/egress-operator/api/v1"
@@ -66,14 +69,20 @@ func main() {
 	}))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:             scheme,
-		MetricsBindAddress: metricsAddr,
-		LeaderElection:     enableLeaderElection,
-		LeaderElectionID:   "egress-operator",
-		LeaseDuration:      &leaseDuration,
-		RenewDeadline:      &renewDeadline,
-		Port:               9443,
-		Namespace:          namespace,
+		Scheme: scheme,
+		Metrics: metricsserver.Options{
+			BindAddress: metricsAddr,
+		},
+		LeaderElection:   enableLeaderElection,
+		LeaderElectionID: "egress-operator",
+		LeaseDuration:    &leaseDuration,
+		RenewDeadline:    &renewDeadline,
+		Cache: cache.Options{
+			DefaultNamespaces: map[string]cache.Config{namespace: {}},
+		},
+		WebhookServer: webhook.NewServer(webhook.Options{
+			Port: 9443,
+		}),
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")

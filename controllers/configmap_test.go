@@ -1,9 +1,9 @@
 package controllers
 
 import (
+	"github.com/google/go-cmp/cmp"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -27,7 +27,16 @@ func Test_envoyConfig(t *testing.T) {
 		{
 			name: "udp and tcp",
 			want: `admin:
-  accessLogPath: /dev/stdout
+  accessLog:
+  - name: envoy.stdout_access_log
+    typedConfig:
+      '@type': type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+      logFormat:
+        contentType: application/json; charset=UTF-8
+        omitEmptyValues: true
+        textFormatSource:
+          inlineString: |
+            [%START_TIME%] "%REQ(:METHOD)% %REQ(X-ENVOY-ORIGINAL-PATH?:PATH)% %PROTOCOL%" %RESPONSE_CODE% %RESPONSE_FLAGS% %BYTES_RECEIVED% %BYTES_SENT% %DURATION% %RESP(X-ENVOY-UPSTREAM-SERVICE-TIME)% "%REQ(X-FORWARDED-FOR)%" "%REQ(USER-AGENT)%" "%REQ(X-REQUEST-ID)%" "%REQ(:AUTHORITY)%" "%UPSTREAM_HOST%"
   address:
     socketAddress:
       address: 0.0.0.0
@@ -84,6 +93,16 @@ staticResources:
       - name: envoy.filters.udp_listener.udp_proxy
         typedConfig:
           '@type': type.googleapis.com/envoy.extensions.filters.udp.udp_proxy.v3.UdpProxyConfig
+          accessLog:
+          - name: envoy.stdout_access_log
+            typedConfig:
+              '@type': type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+              logFormat:
+                contentType: application/json; charset=UTF-8
+                omitEmptyValues: true
+                textFormatSource:
+                  inlineString: '[%START_TIME%] %BYTES_RECEIVED% %BYTES_SENT% %DURATION%
+                    "%DOWNSTREAM_REMOTE_ADDRESS%" "%UPSTREAM_HOST%" "%UPSTREAM_CLUSTER%"'
           cluster: foo_UDP_100
           statPrefix: udp_proxy
     name: foo_UDP_100
@@ -97,12 +116,15 @@ staticResources:
         typedConfig:
           '@type': type.googleapis.com/envoy.extensions.filters.network.tcp_proxy.v3.TcpProxy
           accessLog:
-          - name: envoy.file_access_log
+          - name: envoy.stdout_access_log
             typedConfig:
-              '@type': type.googleapis.com/envoy.extensions.access_loggers.file.v3.FileAccessLog
-              format: |
-                [%START_TIME%] %BYTES_RECEIVED% %BYTES_SENT% %DURATION% "%DOWNSTREAM_REMOTE_ADDRESS%" "%UPSTREAM_HOST%" "%UPSTREAM_CLUSTER%"
-              path: /dev/stdout
+              '@type': type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+              logFormat:
+                contentType: application/json; charset=UTF-8
+                omitEmptyValues: true
+                textFormatSource:
+                  inlineString: '[%START_TIME%] %BYTES_RECEIVED% %BYTES_SENT% %DURATION%
+                    "%DOWNSTREAM_REMOTE_ADDRESS%" "%UPSTREAM_HOST%" "%UPSTREAM_CLUSTER%"'
           cluster: foo_TCP_101
           statPrefix: tcp_proxy
     name: foo_TCP_101
@@ -133,7 +155,35 @@ staticResources:
 		{
 			name: "udp and tcp with max connections",
 			want: `admin:
-  accessLogPath: /dev/stdout
+  accessLog:
+  - name: envoy.stdout_access_log
+    typedConfig:
+      '@type': type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+      logFormat:
+        contentType: application/json; charset=UTF-8
+        jsonFormat:
+          authority: '%REQ(:AUTHORITY)%'
+          bytes_received: '%BYTES_RECEIVED%'
+          bytes_sent: '%BYTES_SENT%'
+          connection_termination_details: '%CONNECTION_TERMINATION_DETAILS%'
+          downstream_local_address: '%DOWNSTREAM_LOCAL_ADDRESS%'
+          downstream_remote_address: '%DOWNSTREAM_REMOTE_ADDRESS%'
+          duration: '%DURATION%'
+          method: '%REQ(:METHOD)%'
+          path: '%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%'
+          protocol: '%PROTOCOL%'
+          requested_server_name: '%REQUESTED_SERVER_NAME%'
+          response_code: '%RESPONSE_CODE%'
+          response_code_details: '%RESPONSE_CODE_DETAILS%'
+          response_flags: '%RESPONSE_FLAGS%'
+          start_time: '%START_TIME%'
+          upstream_cluster: '%UPSTREAM_CLUSTER%'
+          upstream_host: '%UPSTREAM_HOST%'
+          upstream_local_address: '%UPSTREAM_LOCAL_ADDRESS%'
+          upstream_service_time: '%RESP(X-ENVOY-UPSTREAM-SERVICE-TIME)%'
+          upstream_transport_failure_reason: '%UPSTREAM_TRANSPORT_FAILURE_REASON%'
+          user_agent: '%REQ(USER-AGENT)%'
+        omitEmptyValues: true
   address:
     socketAddress:
       address: 0.0.0.0
@@ -196,6 +246,35 @@ staticResources:
       - name: envoy.filters.udp_listener.udp_proxy
         typedConfig:
           '@type': type.googleapis.com/envoy.extensions.filters.udp.udp_proxy.v3.UdpProxyConfig
+          accessLog:
+          - name: envoy.stdout_access_log
+            typedConfig:
+              '@type': type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+              logFormat:
+                contentType: application/json; charset=UTF-8
+                jsonFormat:
+                  authority: '%REQ(:AUTHORITY)%'
+                  bytes_received: '%BYTES_RECEIVED%'
+                  bytes_sent: '%BYTES_SENT%'
+                  connection_termination_details: '%CONNECTION_TERMINATION_DETAILS%'
+                  downstream_local_address: '%DOWNSTREAM_LOCAL_ADDRESS%'
+                  downstream_remote_address: '%DOWNSTREAM_REMOTE_ADDRESS%'
+                  duration: '%DURATION%'
+                  method: '%REQ(:METHOD)%'
+                  path: '%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%'
+                  protocol: '%PROTOCOL%'
+                  requested_server_name: '%REQUESTED_SERVER_NAME%'
+                  response_code: '%RESPONSE_CODE%'
+                  response_code_details: '%RESPONSE_CODE_DETAILS%'
+                  response_flags: '%RESPONSE_FLAGS%'
+                  start_time: '%START_TIME%'
+                  upstream_cluster: '%UPSTREAM_CLUSTER%'
+                  upstream_host: '%UPSTREAM_HOST%'
+                  upstream_local_address: '%UPSTREAM_LOCAL_ADDRESS%'
+                  upstream_service_time: '%RESP(X-ENVOY-UPSTREAM-SERVICE-TIME)%'
+                  upstream_transport_failure_reason: '%UPSTREAM_TRANSPORT_FAILURE_REASON%'
+                  user_agent: '%REQ(USER-AGENT)%'
+                omitEmptyValues: true
           cluster: foo_UDP_100
           statPrefix: udp_proxy
     name: foo_UDP_100
@@ -209,12 +288,34 @@ staticResources:
         typedConfig:
           '@type': type.googleapis.com/envoy.extensions.filters.network.tcp_proxy.v3.TcpProxy
           accessLog:
-          - name: envoy.file_access_log
+          - name: envoy.stdout_access_log
             typedConfig:
-              '@type': type.googleapis.com/envoy.extensions.access_loggers.file.v3.FileAccessLog
-              format: |
-                [%START_TIME%] %BYTES_RECEIVED% %BYTES_SENT% %DURATION% "%DOWNSTREAM_REMOTE_ADDRESS%" "%UPSTREAM_HOST%" "%UPSTREAM_CLUSTER%"
-              path: /dev/stdout
+              '@type': type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+              logFormat:
+                contentType: application/json; charset=UTF-8
+                jsonFormat:
+                  authority: '%REQ(:AUTHORITY)%'
+                  bytes_received: '%BYTES_RECEIVED%'
+                  bytes_sent: '%BYTES_SENT%'
+                  connection_termination_details: '%CONNECTION_TERMINATION_DETAILS%'
+                  downstream_local_address: '%DOWNSTREAM_LOCAL_ADDRESS%'
+                  downstream_remote_address: '%DOWNSTREAM_REMOTE_ADDRESS%'
+                  duration: '%DURATION%'
+                  method: '%REQ(:METHOD)%'
+                  path: '%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%'
+                  protocol: '%PROTOCOL%'
+                  requested_server_name: '%REQUESTED_SERVER_NAME%'
+                  response_code: '%RESPONSE_CODE%'
+                  response_code_details: '%RESPONSE_CODE_DETAILS%'
+                  response_flags: '%RESPONSE_FLAGS%'
+                  start_time: '%START_TIME%'
+                  upstream_cluster: '%UPSTREAM_CLUSTER%'
+                  upstream_host: '%UPSTREAM_HOST%'
+                  upstream_local_address: '%UPSTREAM_LOCAL_ADDRESS%'
+                  upstream_service_time: '%RESP(X-ENVOY-UPSTREAM-SERVICE-TIME)%'
+                  upstream_transport_failure_reason: '%UPSTREAM_TRANSPORT_FAILURE_REASON%'
+                  user_agent: '%REQ(USER-AGENT)%'
+                omitEmptyValues: true
           cluster: foo_TCP_101
           statPrefix: tcp_proxy
     name: foo_TCP_101
@@ -237,6 +338,8 @@ staticResources:
 								Protocol: &tcp,
 							},
 						},
+						JsonAdminAccessLogs:   true,
+						JsonClusterAccessLogs: true,
 					},
 				},
 				maxConns: &maxConnections,
@@ -246,7 +349,11 @@ staticResources:
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.args.es.Spec.EnvoyClusterMaxConnections = tt.args.maxConns
-			if got, _ := envoyConfig(tt.args.es); got != tt.want {
+			got, err := envoyConfig(tt.args.es)
+			if err != nil {
+				t.Error(err)
+			}
+			if got != tt.want {
 				t.Errorf("envoyConfig() = %v, want %v", got, tt.want)
 				t.Error(cmp.Diff(got, tt.want))
 			}

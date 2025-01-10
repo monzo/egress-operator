@@ -9,3 +9,16 @@ resources:
 - auth_proxy_service.yaml
 - auth_proxy_role.yaml
 - auth_proxy_role_binding.yaml
+patches:
+- target:
+    group: rbac.authorization.k8s.io
+    version: v1
+    kind: ClusterRole
+    name: manager-role
+  path: patches/manager_clusterrole_additions.yaml
+- target:
+    group: rbac.authorization.k8s.io
+    version: v1
+    kind: Role
+    name: manager-role
+  path: patches/manager_role_additions.yaml

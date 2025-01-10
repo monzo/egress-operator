@@ -79,6 +79,16 @@ type ExternalServiceSpec struct {
 	// Provides a way to override the global default
 	// +optional
 	ServiceTopologyMode string `json:"serviceTopologyMode,omitempty"`
+
+	// Output admin logs in JSON format as opposed to a text string.
+	// Defaults to false
+	// +optional
+	JsonAdminAccessLogs bool `json:"envoyJsonAdminAccessLogs,omitempty"`
+
+	// Output access logs in JSON format as opposed to a text string.
+	// Defaults to false
+	// +optional
+	JsonClusterAccessLogs bool `json:"envoyJsonClusterAccessLogs,omitempty"`
 }
 
 type ExternalServicePort struct {

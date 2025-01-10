@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"hash/fnv"
 	"strconv"
@@ -13,16 +14,16 @@ import (
 	envoycorev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	envoyendpoint "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	envoylistener "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
-	filev3 "github.com/envoyproxy/go-control-plane/envoy/extensions/access_loggers/file/v3"
+	streamv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/access_loggers/stream/v3"
 	aggregatev3 "github.com/envoyproxy/go-control-plane/envoy/extensions/clusters/aggregate/v3"
 	tcpproxyv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/tcp_proxy/v3"
 	udpproxyv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/udp/udp_proxy/v3"
-	"github.com/golang/protobuf/ptypes/wrappers"
-	"google.golang.org/protobuf/types/known/wrapperspb"
-
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/duration"
+	"github.com/golang/protobuf/ptypes/wrappers"
+	"google.golang.org/protobuf/types/known/structpb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 	corev1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -34,6 +35,39 @@ import (
 )
 
 // +kubebuilder:rbac:namespace=egress-operator-system,groups=core,resources=configmaps,verbs=get;list;watch;create;patch
+
+var (
+	jsonLogFields = &structpb.Struct{
+		Fields: map[string]*structpb.Value{
+			"authority":                         {Kind: &structpb.Value_StringValue{StringValue: "%REQ(:AUTHORITY)%"}},
+			"bytes_received":                    {Kind: &structpb.Value_StringValue{StringValue: "%BYTES_RECEIVED%"}},
+			"bytes_sent":                        {Kind: &structpb.Value_StringValue{StringValue: "%BYTES_SENT%"}},
+			"connection_termination_details":    {Kind: &structpb.Value_StringValue{StringValue: "%CONNECTION_TERMINATION_DETAILS%"}},
+			"downstream_local_address":          {Kind: &structpb.Value_StringValue{StringValue: "%DOWNSTREAM_LOCAL_ADDRESS%"}},
+			"downstream_remote_address":         {Kind: &structpb.Value_StringValue{StringValue: "%DOWNSTREAM_REMOTE_ADDRESS%"}},
+			"duration":                          {Kind: &structpb.Value_StringValue{StringValue: "%DURATION%"}},
+			"method":                            {Kind: &structpb.Value_StringValue{StringValue: "%REQ(:METHOD)%"}},
+			"path":                              {Kind: &structpb.Value_StringValue{StringValue: "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%"}},
+			"protocol":                          {Kind: &structpb.Value_StringValue{StringValue: "%PROTOCOL%"}},
+			"requested_server_name":             {Kind: &structpb.Value_StringValue{StringValue: "%REQUESTED_SERVER_NAME%"}},
+			"response_code":                     {Kind: &structpb.Value_StringValue{StringValue: "%RESPONSE_CODE%"}},
+			"response_code_details":             {Kind: &structpb.Value_StringValue{StringValue: "%RESPONSE_CODE_DETAILS%"}},
+			"response_flags":                    {Kind: &structpb.Value_StringValue{StringValue: "%RESPONSE_FLAGS%"}},
+			"start_time":                        {Kind: &structpb.Value_StringValue{StringValue: "%START_TIME%"}},
+			"upstream_cluster":                  {Kind: &structpb.Value_StringValue{StringValue: "%UPSTREAM_CLUSTER%"}},
+			"upstream_host":                     {Kind: &structpb.Value_StringValue{StringValue: "%UPSTREAM_HOST%"}},
+			"upstream_local_address":            {Kind: &structpb.Value_StringValue{StringValue: "%UPSTREAM_LOCAL_ADDRESS%"}},
+			"upstream_service_time":             {Kind: &structpb.Value_StringValue{StringValue: "%RESP(X-ENVOY-UPSTREAM-SERVICE-TIME)%"}},
+			"upstream_transport_failure_reason": {Kind: &structpb.Value_StringValue{StringValue: "%UPSTREAM_TRANSPORT_FAILURE_REASON%"}},
+			"user_agent":                        {Kind: &structpb.Value_StringValue{StringValue: "%REQ(USER-AGENT)%"}},
+		},
+	}
+)
+
+const (
+	ClusterTextLogFormat = "[%START_TIME%] %BYTES_RECEIVED% %BYTES_SENT% %DURATION% \"%DOWNSTREAM_REMOTE_ADDRESS%\" \"%UPSTREAM_HOST%\" \"%UPSTREAM_CLUSTER%\""
+	AdminTextLogFormat   = "[%START_TIME%] \"%REQ(:METHOD)% %REQ(X-ENVOY-ORIGINAL-PATH?:PATH)% %PROTOCOL%\" %RESPONSE_CODE% %RESPONSE_FLAGS% %BYTES_RECEIVED% %BYTES_SENT% %DURATION% %RESP(X-ENVOY-UPSTREAM-SERVICE-TIME)% \"%REQ(X-FORWARDED-FOR)%\" \"%REQ(USER-AGENT)%\" \"%REQ(X-REQUEST-ID)%\" \"%REQ(:AUTHORITY)%\" \"%UPSTREAM_HOST%\"\n"
+)
 
 func (r *ExternalServiceReconciler) reconcileConfigMap(ctx context.Context, req ctrl.Request, es *egressv1.ExternalService, desired *corev1.ConfigMap) error {
 	if err := ctrl.SetControllerReference(es, desired, r.Scheme); err != nil {
@@ -86,10 +120,81 @@ func adminPort(es *egressv1.ExternalService) int32 {
 	panic("couldn't find a port for admin listener")
 }
 
-const accessLogFormat = `[%START_TIME%] %BYTES_RECEIVED% %BYTES_SENT% %DURATION% "%DOWNSTREAM_REMOTE_ADDRESS%" "%UPSTREAM_HOST%" "%UPSTREAM_CLUSTER%"
-`
+func getStdoutTextAccessLog(format string) ([]*accesslogfilterv3.AccessLog, error) {
+	ac, err := anypb.New(&streamv3.StdoutAccessLog{
+		AccessLogFormat: &streamv3.StdoutAccessLog_LogFormat{
+			LogFormat: &envoycorev3.SubstitutionFormatString{
+				Format: &envoycorev3.SubstitutionFormatString_TextFormatSource{
+					TextFormatSource: &envoycorev3.DataSource{
+						Specifier: &envoycorev3.DataSource_InlineString{
+							InlineString: format,
+						},
+					},
+				},
+				OmitEmptyValues: true,
+				ContentType:     "application/json; charset=UTF-8",
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	accessLog := []*accesslogfilterv3.AccessLog{{
+		Name:       "envoy.stdout_access_log",
+		ConfigType: &accesslogfilterv3.AccessLog_TypedConfig{TypedConfig: ac},
+	}}
+
+	return accessLog, nil
+}
+
+func getJsonAccessLog() ([]*accesslogfilterv3.AccessLog, error) {
+	ac, err := anypb.New(&streamv3.StdoutAccessLog{
+		AccessLogFormat: &streamv3.StdoutAccessLog_LogFormat{
+			LogFormat: &envoycorev3.SubstitutionFormatString{
+				Format: &envoycorev3.SubstitutionFormatString_JsonFormat{
+					JsonFormat: jsonLogFields,
+				},
+				OmitEmptyValues: true,
+				ContentType:     "application/json; charset=UTF-8",
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	accessLog := []*accesslogfilterv3.AccessLog{{
+		Name:       "envoy.stdout_access_log",
+		ConfigType: &accesslogfilterv3.AccessLog_TypedConfig{TypedConfig: ac},
+	}}
+
+	return accessLog, nil
+}
+
+func getClusterAccessLog(es *egressv1.ExternalService) ([]*accesslogfilterv3.AccessLog, error) {
+	if es.Spec.JsonClusterAccessLogs {
+		return getJsonAccessLog()
+	}
+	return getStdoutTextAccessLog(ClusterTextLogFormat)
+}
+
+func getAdminAccessLog(es *egressv1.ExternalService) ([]*accesslogfilterv3.AccessLog, error) {
+	if es.Spec.JsonAdminAccessLogs {
+		return getJsonAccessLog()
+	}
+	return getStdoutTextAccessLog(AdminTextLogFormat)
+}
 
 func envoyConfig(es *egressv1.ExternalService) (string, error) {
+	adminAccessLog, err := getAdminAccessLog(es)
+	if err != nil {
+		return "", err
+	}
+
+	clusterAccessLog, err := getClusterAccessLog(es)
+	if err != nil {
+		return "", err
+	}
+
 	config := bootstrap.Bootstrap{
 		Node: &envoycorev3.Node{
 			Cluster: es.Name,
@@ -104,7 +209,7 @@ func envoyConfig(es *egressv1.ExternalService) (string, error) {
 					},
 				},
 			}},
-			AccessLogPath: "/dev/stdout",
+			AccessLog: adminAccessLog,
 		},
 		StaticResources: &bootstrap.Bootstrap_StaticResources{},
 	}
@@ -197,18 +302,8 @@ func envoyConfig(es *egressv1.ExternalService) (string, error) {
 		var listener *envoylistener.Listener
 		switch protocol {
 		case envoycorev3.SocketAddress_TCP:
-			accessConfig, err := ptypes.MarshalAny(&filev3.FileAccessLog{
-				AccessLogFormat: &filev3.FileAccessLog_Format{
-					Format: accessLogFormat,
-				},
-				Path: "/dev/stdout",
-			})
-
-			filterConfig, err := ptypes.MarshalAny(&tcpproxyv3.TcpProxy{
-				AccessLog: []*accesslogfilterv3.AccessLog{{
-					Name:       "envoy.file_access_log",
-					ConfigType: &accesslogfilterv3.AccessLog_TypedConfig{TypedConfig: accessConfig},
-				}},
+			filterConfig, err := anypb.New(&tcpproxyv3.TcpProxy{
+				AccessLog:  clusterAccessLog,
 				StatPrefix: "tcp_proxy",
 				ClusterSpecifier: &tcpproxyv3.TcpProxy_Cluster{
 					Cluster: clusterNameForListener,
@@ -236,7 +331,8 @@ func envoyConfig(es *egressv1.ExternalService) (string, error) {
 						}}}}},
 			}
 		case envoycorev3.SocketAddress_UDP:
-			filterConfig, err := ptypes.MarshalAny(&udpproxyv3.UdpProxyConfig{
+			filterConfig, err := anypb.New(&udpproxyv3.UdpProxyConfig{
+				AccessLog:  clusterAccessLog,
 				StatPrefix: "udp_proxy",
 				RouteSpecifier: &udpproxyv3.UdpProxyConfig_Cluster{
 					Cluster: name,

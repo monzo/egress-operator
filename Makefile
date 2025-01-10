@@ -1,7 +1,5 @@
 # Image URL to use all building/pushing image targets
 IMG ?= ${ACC}.dkr.ecr.eu-west-1.amazonaws.com/monzo/egress-operator:manager-$(shell git rev-parse --short head)
-# Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
-CRD_OPTIONS ?= "crd:trivialVersions=true"
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -39,7 +37,7 @@ deploy: manifests
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
 # Run go fmt against code
 fmt:
@@ -55,7 +53,7 @@ generate: controller-gen
 
 # Build the docker image
 docker-build: test
-	docker build . -t ${IMG}
+	docker buildx build . -t ${IMG} --platform=linux/amd64
 
 # Push the docker image
 docker-push:
@@ -66,14 +64,11 @@ docker-push:
 controller-gen:
 ifeq (, $(shell which controller-gen))
 	@{ \
-	set -e ;\
-	CONTROLLER_GEN_TMP_DIR=$$(mktemp -d) ;\
-	cd $$CONTROLLER_GEN_TMP_DIR ;\
-	go mod init tmp ;\
-	go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.4.0 ;\
-	rm -rf $$CONTROLLER_GEN_TMP_DIR ;\
+	set -ex ;\
+	mkdir -p bin ;\
+	GOBIN=$$(pwd)/bin go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.17.0 ;\
 	}
-CONTROLLER_GEN=$(GOBIN)/controller-gen
+CONTROLLER_GEN=./bin/controller-gen
 else
 CONTROLLER_GEN=$(shell which controller-gen)
 endif
