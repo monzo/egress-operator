@@ -101,8 +101,8 @@ staticResources:
                 contentType: application/json; charset=UTF-8
                 omitEmptyValues: true
                 textFormatSource:
-                  inlineString: '[%START_TIME%] %BYTES_RECEIVED% %BYTES_SENT% %DURATION%
-                    "%DOWNSTREAM_REMOTE_ADDRESS%" "%UPSTREAM_HOST%" "%UPSTREAM_CLUSTER%"'
+                  inlineString: |
+                    [%START_TIME%] %BYTES_RECEIVED% %BYTES_SENT% %DURATION% "%DOWNSTREAM_REMOTE_ADDRESS%" "%UPSTREAM_HOST%" "%UPSTREAM_CLUSTER%"
           cluster: foo_UDP_100
           statPrefix: udp_proxy
     name: foo_UDP_100
@@ -123,8 +123,8 @@ staticResources:
                 contentType: application/json; charset=UTF-8
                 omitEmptyValues: true
                 textFormatSource:
-                  inlineString: '[%START_TIME%] %BYTES_RECEIVED% %BYTES_SENT% %DURATION%
-                    "%DOWNSTREAM_REMOTE_ADDRESS%" "%UPSTREAM_HOST%" "%UPSTREAM_CLUSTER%"'
+                  inlineString: |
+                    [%START_TIME%] %BYTES_RECEIVED% %BYTES_SENT% %DURATION% "%DOWNSTREAM_REMOTE_ADDRESS%" "%UPSTREAM_HOST%" "%UPSTREAM_CLUSTER%"
           cluster: foo_TCP_101
           statPrefix: tcp_proxy
     name: foo_TCP_101
@@ -354,7 +354,7 @@ staticResources:
 				t.Error(err)
 			}
 			if got != tt.want {
-				t.Errorf("envoyConfig() = %v, want %v", got, tt.want)
+				t.Errorf("got:\n%v, want:\n%v", got, tt.want)
 				t.Error(cmp.Diff(got, tt.want))
 			}
 		})
