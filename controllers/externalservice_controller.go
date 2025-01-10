@@ -119,6 +119,8 @@ func annotations(es *egressv1.ExternalService) map[string]string {
 		} else {
 			annotations["service.kubernetes.io/topology-mode"] = "Auto"
 		}
+	} else {
+		delete(annotations, "service.kubernetes.io/topology-mode")
 	}
 	return annotations
 }
