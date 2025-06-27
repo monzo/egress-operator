@@ -96,6 +96,12 @@ type ExternalServiceSpec struct {
 		Zone     int `json:"zone,omitempty"`
 		Hostname int `json:"hostname,omitempty"`
 	} `json:"topologySpreadSkews,omitempty"`
+
+	// ServiceTrafficDistribution allows configuration of the service traffic distribution mode
+	// if it's not set the field won't be set at all
+	// https://kubernetes.io/docs/concepts/services-networking/service/#traffic-distribution
+	// +optional
+	ServiceTrafficDistribution string `json:"serviceTrafficDistribution,omitempty"`
 }
 
 type ExternalServicePort struct {
