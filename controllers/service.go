@@ -102,6 +102,18 @@ func service(es *egressv1.ExternalService, ready bool, current *corev1.Service) 
 		l["egress.monzo.com/hijack-dns"] = "waiting-for-pods"
 	}
 
+	serviceSpec := corev1.ServiceSpec{
+		Selector:        labelsToSelect(es),
+		Ports:           servicePorts(es),
+		SessionAffinity: corev1.ServiceAffinityNone,
+		Type:            corev1.ServiceTypeClusterIP,
+	}
+
+	if es.Spec.ServiceTrafficDistribution != "" {
+		trafficDistribution := es.Spec.ServiceTrafficDistribution
+		serviceSpec.TrafficDistribution = &trafficDistribution
+	}
+
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        es.Name,
@@ -109,11 +121,6 @@ func service(es *egressv1.ExternalService, ready bool, current *corev1.Service) 
 			Labels:      l,
 			Annotations: annotations(es),
 		},
-		Spec: corev1.ServiceSpec{
-			Selector:        labelsToSelect(es),
-			Ports:           servicePorts(es),
-			SessionAffinity: corev1.ServiceAffinityNone,
-			Type:            corev1.ServiceTypeClusterIP,
-		},
+		Spec: serviceSpec,
 	}
 }
