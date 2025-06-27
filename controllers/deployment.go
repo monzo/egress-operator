@@ -111,10 +111,17 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 		zoneKey, zoneKeyFound := os.LookupEnv("POD_TOPOLOGY_ZONE_MAX_SKEW_KEY")
 		zoneWhenUnsatisfiable, zoneWhenUnsatisfiableFound := os.LookupEnv("POD_TOPOLOGY_ZONE_WHEN_UNSATISFIABLE")
 		if zoneEnabled {
-			maxSkew, err := strconv.Atoi(zoneSkew)
-			if err != nil {
-				maxSkew = 1
+			maxSkew := 1
+			if es.Spec.TopologySpreadSkews.Zone != 0 {
+				maxSkew = es.Spec.TopologySpreadSkews.Zone
+			} else {
+				var err error
+				maxSkew, err = strconv.Atoi(zoneSkew)
+				if err != nil {
+					maxSkew = 1
+				}
 			}
+
 			// Default zone key to the Kubernetes topology one if not specified
 			if !zoneKeyFound {
 				zoneKey = "topology.kubernetes.io/zone"
@@ -133,10 +140,17 @@ func deployment(es *egressv1.ExternalService, configHash string) *appsv1.Deploym
 		hostnameKey, hostnameKeyFound := os.LookupEnv("POD_TOPOLOGY_HOSTNAME_MAX_SKEW_KEY")
 		hostnameWhenUnsatisfiable, hostnameWhenUnsatisfiableFound := os.LookupEnv("POD_TOPOLOGY_HOSTNAME_WHEN_UNSATISFIABLE")
 		if hostnameEnabled {
-			maxSkew, err := strconv.Atoi(hostnameSkew)
-			if err != nil {
-				maxSkew = 1
+			maxSkew := 1
+			if es.Spec.TopologySpreadSkews.Hostname != 0 {
+				maxSkew = es.Spec.TopologySpreadSkews.Hostname
+			} else {
+				var err error
+				maxSkew, err = strconv.Atoi(hostnameSkew)
+				if err != nil {
+					maxSkew = 1
+				}
 			}
+
 			// Default zone key to the Kubernetes topology one if not specified
 			if !hostnameKeyFound {
 				hostnameKey = "kubernetes.io/hostname"
