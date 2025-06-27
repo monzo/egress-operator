@@ -89,6 +89,13 @@ type ExternalServiceSpec struct {
 	// Defaults to false
 	// +optional
 	JsonClusterAccessLogs bool `json:"envoyJsonClusterAccessLogs,omitempty"`
+
+	// TopologySpreadSkews is a struct that allows overriding the topology spread skews for the service
+	// +optional
+	TopologySpreadSkews struct {
+		Zone     int `json:"zone,omitempty"`
+		Hostname int `json:"hostname,omitempty"`
+	} `json:"topologySpreadSkews,omitempty"`
 }
 
 type ExternalServicePort struct {
