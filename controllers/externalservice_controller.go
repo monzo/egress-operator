@@ -19,16 +19,21 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"time"
 
 	"github.com/go-logr/logr"
+	"golang.org/x/time/rate"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	egressv1 "github.com/monzo/egress-operator/api/v1"
 )
@@ -42,6 +47,8 @@ type ExternalServiceReconciler struct {
 	Scheme *runtime.Scheme
 
 	EnablePodDisruptionBudgets bool
+	ReconcilesPerMinute        float64
+	ReconcileBurst             int
 }
 
 // +kubebuilder:rbac:groups=egress.monzo.com,resources=externalservices,verbs=get;list;watch;create;update;patch;delete
@@ -130,8 +137,24 @@ func labelsToSelect(es *egressv1.ExternalService) map[string]string {
 }
 
 func (r *ExternalServiceReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	rateLimiter := workqueue.NewTypedMaxOfRateLimiter[reconcile.Request](
+		// Exponential Failure Rate Limiter: 5ms base delay, 5min max delay
+		// Applies exponential backoff per object on reconciliation failure
+		workqueue.NewTypedItemExponentialFailureRateLimiter[reconcile.Request](
+			5*time.Millisecond,
+			5*time.Minute,
+		),
+		// Global Token Bucket Limiter
+		// Limits the overall reconciliation rate to avoid overwhelming the cluster with impactful changes
+		&workqueue.TypedBucketRateLimiter[reconcile.Request]{
+			Limiter: rate.NewLimiter(rate.Limit(r.ReconcilesPerMinute/60.0), r.ReconcileBurst),
+		},
+	)
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&egressv1.ExternalService{}).
+		WithOptions(controller.Options{
+			RateLimiter: rateLimiter,
+		}).
 		Owns(&networkingv1.NetworkPolicy{}).
 		Owns(&corev1.Service{}).
 		Owns(&appsv1.Deployment{}).

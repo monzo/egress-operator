@@ -18,10 +18,11 @@ package main
 import (
 	"flag"
 	"os"
+	"time"
+
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
-	"time"
 
 	egressv1 "github.com/monzo/egress-operator/api/v1"
 	"github.com/monzo/egress-operator/controllers"
@@ -56,12 +57,16 @@ func main() {
 		metricsAddr                string
 		enableLeaderElection       bool
 		enablePodDisruptionBudgets bool
+		reconcilesPerMinute        float64
+		reconcileBurst             int
 	)
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&enablePodDisruptionBudgets, "enable-pod-disruption-budgets", false,
 		"Enable deploying pod disruption budgets for egress gateways.")
+	flag.Float64Var(&reconcilesPerMinute, "reconciles-per-minute", 60, "Global reconcile rate limit (per minute).")
+	flag.IntVar(&reconcileBurst, "reconcile-burst", 10, "Reconcile rate limiter burst.")
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(func(o *zap.Options) {
@@ -94,6 +99,8 @@ func main() {
 		Log:                        ctrl.Log.WithName("controllers").WithName("ExternalService"),
 		Scheme:                     mgr.GetScheme(),
 		EnablePodDisruptionBudgets: enablePodDisruptionBudgets,
+		ReconcilesPerMinute:        reconcilesPerMinute,
+		ReconcileBurst:             reconcileBurst,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ExternalService")
 		os.Exit(1)
