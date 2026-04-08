@@ -90,12 +90,9 @@ type ExternalServiceSpec struct {
 	// +optional
 	JsonClusterAccessLogs bool `json:"envoyJsonClusterAccessLogs,omitempty"`
 
-	// TopologySpreadSkews is a struct that allows overriding the topology spread skews for the service
+	// TopologySpreadSkews allows overriding the topology spread skews for the service
 	// +optional
-	TopologySpreadSkews struct {
-		Zone     int `json:"zone,omitempty"`
-		Hostname int `json:"hostname,omitempty"`
-	} `json:"topologySpreadSkews,omitempty"`
+	TopologySpreadSkews TopologySpreadSkews `json:"topologySpreadSkews,omitempty"`
 
 	// ServiceTrafficDistribution allows configuration of the service traffic distribution mode
 	// if it's not set the field won't be set at all
@@ -112,6 +109,17 @@ type ExternalServicePort struct {
 
 	// The port on the given protocol.
 	Port int32 `json:"port,omitempty"`
+}
+
+// TopologySpreadSkews allows per-service overrides of topology spread constraint max skew values.
+type TopologySpreadSkews struct {
+	// Zone is the max skew for the zone topology key. If unset, falls back to the global env var or default.
+	// +optional
+	Zone int `json:"zone,omitempty"`
+
+	// Hostname is the max skew for the hostname topology key. If unset, falls back to the global env var or default.
+	// +optional
+	Hostname int `json:"hostname,omitempty"`
 }
 
 // ExternalServiceStatus defines the observed state of ExternalService
