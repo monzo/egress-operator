@@ -92,16 +92,18 @@ type ExternalServiceSpec struct {
 
 	// TopologySpreadSkews is a struct that allows overriding the topology spread skews for the service
 	// +optional
-	TopologySpreadSkews struct {
-		Zone     int `json:"zone,omitempty"`
-		Hostname int `json:"hostname,omitempty"`
-	} `json:"topologySpreadSkews,omitempty"`
+	TopologySpreadSkews TopologySpreadSkews `json:"topologySpreadSkews,omitempty"`
 
 	// ServiceTrafficDistribution allows configuration of the service traffic distribution mode
 	// if it's not set the field won't be set at all
 	// https://kubernetes.io/docs/concepts/services-networking/service/#traffic-distribution
 	// +optional
 	ServiceTrafficDistribution string `json:"serviceTrafficDistribution,omitempty"`
+}
+
+type TopologySpreadSkews struct {
+	Zone     int `json:"zone,omitempty"`
+	Hostname int `json:"hostname,omitempty"`
 }
 
 type ExternalServicePort struct {

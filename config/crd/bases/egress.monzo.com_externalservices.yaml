@@ -171,11 +171,26 @@ spec:
               serviceTopologyMode:
                 description: Provides a way to override the global default
                 type: string
+              serviceTrafficDistribution:
+                description: |-
+                  ServiceTrafficDistribution allows configuration of the service traffic distribution mode
+                  if it's not set the field won't be set at all
+                  https://kubernetes.io/docs/concepts/services-networking/service/#traffic-distribution
+                type: string
               targetCPUUtilizationPercentage:
                 description: Target average CPU utilization (represented as a percentage
                   of requested CPU) over all the pods. Defaults to 50
                 format: int32
                 type: integer
+              topologySpreadSkews:
+                description: TopologySpreadSkews is a struct that allows overriding
+                  the topology spread skews for the service
+                properties:
+                  hostname:
+                    type: integer
+                  zone:
+                    type: integer
+                type: object
             type: object
           status:
             description: ExternalServiceStatus defines the observed state of ExternalService
