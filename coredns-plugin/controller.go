@@ -1,6 +1,7 @@
 package egressoperator
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"sync"
@@ -67,15 +68,11 @@ func newdnsController(kubeClient kubernetes.Interface, namespace, zone string, r
 			}
 
 			rules = append(rules, &exactNameRule{
-				NextAction: "stop",
-				From:       rewriteQuestionFrom,
-				To:         rewriteQuestionTo,
-				ResponseRule: rewrite.ResponseRule{
-					Active:      true,
-					Type:        "name",
-					Pattern:     rewriteAnswerFromPattern,
-					Replacement: rewriteQuestionFrom,
-				},
+				NextAction:        "stop",
+				From:              rewriteQuestionFrom,
+				To:                rewriteQuestionTo,
+				AnswerPattern:     rewriteAnswerFromPattern,
+				AnswerReplacement: rewriteQuestionFrom,
 			})
 		}
 
@@ -100,7 +97,7 @@ func serviceListFunc(c kubernetes.Interface, ns string, s labels.Selector) func(
 		if s != nil {
 			opts.LabelSelector = s.String()
 		}
-		listV1, err := c.CoreV1().Services(ns).List(opts)
+		listV1, err := c.CoreV1().Services(ns).List(context.TODO(), opts)
 		return listV1, err
 	}
 }
@@ -110,7 +107,7 @@ func serviceWatchFunc(c kubernetes.Interface, ns string, s labels.Selector) func
 		if s != nil {
 			options.LabelSelector = s.String()
 		}
-		w, err := c.CoreV1().Services(ns).Watch(options)
+		w, err := c.CoreV1().Services(ns).Watch(context.TODO(), options)
 		return w, err
 	}
 }
