@@ -14,6 +14,20 @@ all: manager
 test: generate fmt vet manifests
 	go test ./... -coverprofile cover.out
 
+LOCALBIN ?= $(shell pwd)/bin
+
+# Default gateway Envoy image, read from controllers/deployment.go so there is a single source of truth
+ENVOY_IMAGE ?= $(shell sed -n 's/.*img := "\(envoyproxy\/envoy:[^"]*\)".*/\1/p' controllers/deployment.go)
+
+# Validate the Envoy configs the operator generates against the real Envoy binary (needs Docker)
+validate-envoy-config:
+	rm -rf $(LOCALBIN)/envoy-configs && mkdir -p $(LOCALBIN)/envoy-configs
+	ENVOY_CONFIG_DUMP_DIR=$(LOCALBIN)/envoy-configs go test ./controllers/ -run Test_envoyConfig -count=1
+	for f in $(LOCALBIN)/envoy-configs/*.yaml; do \
+		echo "validating $$(basename $$f) with $(ENVOY_IMAGE)"; \
+		docker run --rm -v $(LOCALBIN)/envoy-configs:/cfg $(ENVOY_IMAGE) --mode validate -c /cfg/$$(basename $$f) || exit 1; \
+	done
+
 # Build manager binary
 manager: generate fmt vet
 	go build -o bin/manager main.go

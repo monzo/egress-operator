@@ -1,8 +1,12 @@
 package controllers
 
 import (
-	"github.com/google/go-cmp/cmp"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -88,23 +92,22 @@ staticResources:
         address: 0.0.0.0
         portValue: 100
         protocol: UDP
-    filterChains:
-    - filters:
-      - name: envoy.filters.udp_listener.udp_proxy
-        typedConfig:
-          '@type': type.googleapis.com/envoy.extensions.filters.udp.udp_proxy.v3.UdpProxyConfig
-          accessLog:
-          - name: envoy.stdout_access_log
-            typedConfig:
-              '@type': type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
-              logFormat:
-                contentType: application/json; charset=UTF-8
-                omitEmptyValues: true
-                textFormatSource:
-                  inlineString: |
-                    [%START_TIME%] %BYTES_RECEIVED% %BYTES_SENT% %DURATION% "%DOWNSTREAM_REMOTE_ADDRESS%" "%UPSTREAM_HOST%" "%UPSTREAM_CLUSTER%"
-          cluster: foo_UDP_100
-          statPrefix: udp_proxy
+    listenerFilters:
+    - name: envoy.filters.udp_listener.udp_proxy
+      typedConfig:
+        '@type': type.googleapis.com/envoy.extensions.filters.udp.udp_proxy.v3.UdpProxyConfig
+        accessLog:
+        - name: envoy.stdout_access_log
+          typedConfig:
+            '@type': type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+            logFormat:
+              contentType: application/json; charset=UTF-8
+              omitEmptyValues: true
+              textFormatSource:
+                inlineString: |
+                  [%START_TIME%] %BYTES_RECEIVED% %BYTES_SENT% %DURATION% "%DOWNSTREAM_REMOTE_ADDRESS%" "%UPSTREAM_HOST%" "%UPSTREAM_CLUSTER%"
+        cluster: foo_UDP_100
+        statPrefix: udp_proxy
     name: foo_UDP_100
   - address:
       socketAddress:
@@ -241,42 +244,41 @@ staticResources:
         address: 0.0.0.0
         portValue: 100
         protocol: UDP
-    filterChains:
-    - filters:
-      - name: envoy.filters.udp_listener.udp_proxy
-        typedConfig:
-          '@type': type.googleapis.com/envoy.extensions.filters.udp.udp_proxy.v3.UdpProxyConfig
-          accessLog:
-          - name: envoy.stdout_access_log
-            typedConfig:
-              '@type': type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
-              logFormat:
-                contentType: application/json; charset=UTF-8
-                jsonFormat:
-                  authority: '%REQ(:AUTHORITY)%'
-                  bytes_received: '%BYTES_RECEIVED%'
-                  bytes_sent: '%BYTES_SENT%'
-                  connection_termination_details: '%CONNECTION_TERMINATION_DETAILS%'
-                  downstream_local_address: '%DOWNSTREAM_LOCAL_ADDRESS%'
-                  downstream_remote_address: '%DOWNSTREAM_REMOTE_ADDRESS%'
-                  duration: '%DURATION%'
-                  method: '%REQ(:METHOD)%'
-                  path: '%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%'
-                  protocol: '%PROTOCOL%'
-                  requested_server_name: '%REQUESTED_SERVER_NAME%'
-                  response_code: '%RESPONSE_CODE%'
-                  response_code_details: '%RESPONSE_CODE_DETAILS%'
-                  response_flags: '%RESPONSE_FLAGS%'
-                  start_time: '%START_TIME%'
-                  upstream_cluster: '%UPSTREAM_CLUSTER%'
-                  upstream_host: '%UPSTREAM_HOST%'
-                  upstream_local_address: '%UPSTREAM_LOCAL_ADDRESS%'
-                  upstream_service_time: '%RESP(X-ENVOY-UPSTREAM-SERVICE-TIME)%'
-                  upstream_transport_failure_reason: '%UPSTREAM_TRANSPORT_FAILURE_REASON%'
-                  user_agent: '%REQ(USER-AGENT)%'
-                omitEmptyValues: true
-          cluster: foo_UDP_100
-          statPrefix: udp_proxy
+    listenerFilters:
+    - name: envoy.filters.udp_listener.udp_proxy
+      typedConfig:
+        '@type': type.googleapis.com/envoy.extensions.filters.udp.udp_proxy.v3.UdpProxyConfig
+        accessLog:
+        - name: envoy.stdout_access_log
+          typedConfig:
+            '@type': type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+            logFormat:
+              contentType: application/json; charset=UTF-8
+              jsonFormat:
+                authority: '%REQ(:AUTHORITY)%'
+                bytes_received: '%BYTES_RECEIVED%'
+                bytes_sent: '%BYTES_SENT%'
+                connection_termination_details: '%CONNECTION_TERMINATION_DETAILS%'
+                downstream_local_address: '%DOWNSTREAM_LOCAL_ADDRESS%'
+                downstream_remote_address: '%DOWNSTREAM_REMOTE_ADDRESS%'
+                duration: '%DURATION%'
+                method: '%REQ(:METHOD)%'
+                path: '%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%'
+                protocol: '%PROTOCOL%'
+                requested_server_name: '%REQUESTED_SERVER_NAME%'
+                response_code: '%RESPONSE_CODE%'
+                response_code_details: '%RESPONSE_CODE_DETAILS%'
+                response_flags: '%RESPONSE_FLAGS%'
+                start_time: '%START_TIME%'
+                upstream_cluster: '%UPSTREAM_CLUSTER%'
+                upstream_host: '%UPSTREAM_HOST%'
+                upstream_local_address: '%UPSTREAM_LOCAL_ADDRESS%'
+                upstream_service_time: '%RESP(X-ENVOY-UPSTREAM-SERVICE-TIME)%'
+                upstream_transport_failure_reason: '%UPSTREAM_TRANSPORT_FAILURE_REASON%'
+                user_agent: '%REQ(USER-AGENT)%'
+              omitEmptyValues: true
+        cluster: foo_UDP_100
+        statPrefix: udp_proxy
     name: foo_UDP_100
   - address:
       socketAddress:
@@ -357,6 +359,57 @@ staticResources:
 				t.Errorf("got:\n%v, want:\n%v", got, tt.want)
 				t.Error(cmp.Diff(got, tt.want))
 			}
+			// Lets CI validate generated configs with the real Envoy binary (`envoy --mode validate`)
+			if dir := os.Getenv("ENVOY_CONFIG_DUMP_DIR"); dir != "" {
+				file := filepath.Join(dir, strings.ReplaceAll(tt.name, " ", "_")+".yaml")
+				if err := os.WriteFile(file, []byte(got), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
 		})
+	}
+}
+
+func Test_envoyConfig_IpOverride(t *testing.T) {
+	tcp := corev1.ProtocolTCP
+	es := &egressv1.ExternalService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "foo",
+			Namespace: "foo",
+		},
+		Spec: egressv1.ExternalServiceSpec{
+			DnsName: "example.com",
+			Ports: []egressv1.ExternalServicePort{
+				{
+					Port:     443,
+					Protocol: &tcp,
+				},
+			},
+			IpOverride:           []string{"10.1.2.3"},
+			EnvoyDnsRefreshRateS: 30,
+			EnvoyRespectDnsTTL:   true,
+		},
+	}
+
+	got, err := envoyConfig(es)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"foo_TCP_443-override",
+		"foo_TCP_443-aggregate",
+		"10.1.2.3",
+		"envoy.clusters.aggregate",
+		"dnsRefreshRate: 30s",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("envoy config missing %q\n%s", want, got)
+		}
+	}
+	if dir := os.Getenv("ENVOY_CONFIG_DUMP_DIR"); dir != "" {
+		file := filepath.Join(dir, "ip_override.yaml")
+		if err := os.WriteFile(file, []byte(got), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 }

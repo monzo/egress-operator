@@ -352,12 +352,13 @@ func envoyConfig(es *egressv1.ExternalService) (string, error) {
 							PortSpecifier: &envoycorev3.SocketAddress_PortValue{
 								PortValue: uint32(port.Port),
 							}}}},
-				FilterChains: []*envoylistener.FilterChain{{
-					Filters: []*envoylistener.Filter{{
-						Name: "envoy.filters.udp_listener.udp_proxy",
-						ConfigType: &envoylistener.Filter_TypedConfig{
-							TypedConfig: filterConfig,
-						}}}}},
+				// UDP listeners are connection-less: the UDP proxy is a listener filter, and Envoy
+				// rejects UDP listeners that declare filter chains.
+				ListenerFilters: []*envoylistener.ListenerFilter{{
+					Name: "envoy.filters.udp_listener.udp_proxy",
+					ConfigType: &envoylistener.ListenerFilter_TypedConfig{
+						TypedConfig: filterConfig,
+					}}},
 			}
 		}
 
