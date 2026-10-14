@@ -75,9 +75,21 @@ make deploy IMG=yourrepo/egress-operator:v0.1
 Once the controller and dns server are running, create ExternalService objects which denote what dns name you want
 to capture traffic for. Dns queries for this name will be rewritten to point to gateway pods.
 
-By default, your client pods need a label `egress.monzo.com/allowed-gateway: nameofgateway` to be able to reach
-the destination, but you can always write an additional NetworkPolicy selecting gateway pods and allowing all traffic,
-for testing purposes.
+By default, your client pods need the label `egress.monzo.com/allowed-<name>: "true"`, where `<name>` is the
+`metadata.name` of the ExternalService, to be able to reach the destination. For the `google` ExternalService below:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: client
+  labels:
+    egress.monzo.com/allowed-google: "true"
+```
+
+You can check the expected label with `kubectl get networkpolicy <name> -n egress-operator-system -o yaml`
+(see `.spec.ingress[].from[].podSelector`). You can always write an additional NetworkPolicy selecting gateway pods and
+allowing all traffic, for testing purposes.
 
 An example ExternalService:
 
@@ -221,3 +233,20 @@ if you set `spec.serviceTopologyMode: "None"` this will disable topology aware r
 | POD_TOPOLOGY_HOSTNAME_MAX_SKEW_KEY | `kubernetes.io/hostname`                  | Topology key for the hostname constraint                  |
 | POD_TOPOLOGY_HOSTNAME_MAX_SKEW     | Empty, won't inject a hostname constraint | Value of maxSkew for the hostname constraint              |
 | ENABLE_SERVICE_TOPOLOGY_MODE       | Empty, won't add the annotation           | Set to 'true' to add the topology mode service annotation |
+
+## FAQ
+
+### My pod can still reach the allow-listed host directly, or can't reach it at all ([#21](https://github.com/monzo/egress-operator/issues/21))
+
+* The operator only *permits* traffic through gateways. Unless a default-deny egress policy is in place (see
+  [Blocking non-gateway traffic](#blocking-non-gateway-traffic)), pods can still reach the internet directly.
+* Client pods need `egress.monzo.com/allowed-<externalservice-name>: "true"`, not `allowed-gateway: <name>`.
+* With a default-deny egress policy, client pods must still be allowed to reach the gateway pods in
+  `egress-operator-system`, and to reach DNS.
+* NetworkPolicies are only enforced if your CNI supports them (e.g. Calico or Cilium).
+* Gateway pods resolve the destination with the *node's* resolver (`dnsPolicy: Default`), so they don't get their
+  own hijacked answer back. If your node resolver has a private address, also allow gateway pods
+  (`app: egress-gateway`) egress on port 53. Without it, clients connect to the gateway but the upstream connection
+  fails (for example TLS errors from `curl`).
+* With `hijackDns: true`, traffic to the hostname resolves to the gateway Service. Without it, clients must use the
+  gateway Service name (`<name>.egress-operator-system`) directly.
