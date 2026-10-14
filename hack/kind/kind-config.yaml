@@ -1,0 +1,12 @@
+# Kind cluster for the egress policy validation lab.
+# The default CNI (kindnet) is disabled so Calico can enforce NetworkPolicies.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+networking:
+  disableDefaultCNI: true
+  # Calico picks this up from kubeadm. Avoid 192.168.0.0/16: Docker Desktop's DNS (192.168.65.254) lives there.
+  podSubnet: 10.244.0.0/16
+  serviceSubnet: 10.96.0.0/12
+nodes:
+- role: control-plane
+- role: worker

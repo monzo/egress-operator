@@ -14,6 +14,14 @@ all: manager
 test: generate fmt vet manifests
 	go test ./... -coverprofile cover.out
 
+# Kubernetes Egress Policy Validation Lab: Kind + Calico cluster, deploy from this checkout, check
+# allowed/denied egress (see docs/quickstart.md). KEEP_CLUSTER=1 keeps the cluster afterwards.
+e2e-kind:
+	hack/kind/e2e.sh all
+
+e2e-kind-clean:
+	hack/kind/e2e.sh down
+
 # Build manager binary
 manager: generate fmt vet
 	go build -o bin/manager main.go

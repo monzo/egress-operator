@@ -22,3 +22,6 @@ bin
 *.swp
 *.swo
 *~
+/test/results
+.ignore/snyk.txt
+.ignore/pr-followup-draft.md

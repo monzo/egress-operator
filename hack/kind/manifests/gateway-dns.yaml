@@ -1,0 +1,26 @@
+# Gateway pods use `dnsPolicy: Default`, i.e. the node's resolver, so they don't get their own
+# hijacked answers back from cluster DNS. The operator's public-egress policy only allows public IPs,
+# and node resolvers usually live on private addresses, so allow DNS explicitly (policies are additive).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: egress-gateway-dns
+  namespace: egress-operator-system
+spec:
+  podSelector:
+    matchLabels:
+      app: egress-gateway
+  policyTypes:
+  - Egress
+  egress:
+  - ports:
+    - port: 53
+      protocol: UDP
+    - port: 53
+      protocol: TCP
+  # Kind/Docker only: the node DNATs its resolver (e.g. 192.168.65.254:53 on Docker Desktop) to
+  # Docker's embedded DNS on 127.0.0.11:<random port>, and Calico evaluates policy after DNAT,
+  # so the port-53 rule above never matches there.
+  - to:
+    - ipBlock:
+        cidr: 127.0.0.11/32

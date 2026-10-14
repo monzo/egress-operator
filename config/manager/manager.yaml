@@ -24,7 +24,7 @@ spec:
         - 172.16.0.0/12
         - 192.0.0.0/24
         - 192.168.0.0/16
-        - 192.18.0.0/15
+        - 198.18.0.0/15
   podSelector:
     matchLabels:
       app: "egress-gateway"

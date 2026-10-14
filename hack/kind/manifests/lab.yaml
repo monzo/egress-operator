@@ -1,0 +1,61 @@
+# Workloads under test. Every pod in the `lab` namespace may only send traffic inside the
+# cluster, so the only route to the internet is through an egress gateway.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-external-egress
+  namespace: lab
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - ipBlock:
+        cidr: 10.244.0.0/16  # pod CIDR (Calico evaluates policy after Service DNAT)
+    - ipBlock:
+        cidr: 10.96.0.0/12   # Service CIDR
+---
+# Allowed to use the `example` gateway
+apiVersion: v1
+kind: Pod
+metadata:
+  name: allowed
+  namespace: lab
+  labels:
+    egress.monzo.com/allowed-example: "true"
+spec:
+  containers:
+  - name: curl
+    image: curlimages/curl:8.11.1
+    command: ["sleep", "infinity"]
+---
+# The wrong label from the old README (issue #21): must NOT be allowed
+apiVersion: v1
+kind: Pod
+metadata:
+  name: wrong-label
+  namespace: lab
+  labels:
+    egress.monzo.com/allowed-gateway: example
+spec:
+  containers:
+  - name: curl
+    image: curlimages/curl:8.11.1
+    command: ["sleep", "infinity"]
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: denied
+  namespace: lab
+spec:
+  containers:
+  - name: curl
+    image: curlimages/curl:8.11.1
+    command: ["sleep", "infinity"]

@@ -1,0 +1,9 @@
+# Deploys config/default with the locally built operator image (loaded into Kind, never pulled).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ../../../config/default
+images:
+- name: controller
+  newName: egress-operator
+  newTag: lab
