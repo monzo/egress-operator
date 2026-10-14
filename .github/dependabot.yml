@@ -1,0 +1,28 @@
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      k8s:
+        patterns: ["k8s.io/*", "sigs.k8s.io/*"]
+      golang-x:
+        patterns: ["golang.org/x/*"]
+  - package-ecosystem: gomod
+    directory: /coredns-plugin
+    schedule:
+      interval: weekly
+    groups:
+      coredns:
+        patterns: ["github.com/coredns/*"]
+      golang-x:
+        patterns: ["golang.org/x/*"]
+  - package-ecosystem: docker
+    directories: ["/", "/coredns-plugin"]
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
