@@ -19,10 +19,56 @@ In the `egress-operator-system` namespace, it creates:
 ## Pre-requisites
 
 1. You need to have a private container repository for hosting the egress-operator image, such as an AWS Elastic Container Repository (ECR) or a GCP Container Registry (GCR), which needs to be accessible from your cluster. This will be referred to as `yourrepo` in the instructions below.
-2. Your local system must have a recent version of `golang` for building the code, which you can install by following instructions [here](https://golang.org/doc/install).
-3. Your local system must have Kubebuilder for code generation, which you can install by following instructions [here](https://book.kubebuilder.io/quick-start.html).
-4. Your local system must have Kustomize for building the Kubernetes manifests, which you can install by following instructions [here](https://kubernetes-sigs.github.io/kustomize/installation/).
-5. Your cluster must be running CoreDNS instead of kube-dns, which may not be the case if you are using a managed Kubernetes service. [This article](https://medium.com/google-cloud/using-coredns-on-gke-3973598ab561) provides some help for GCP Kubernetes Engine, and guidance for AWS Elastic Kubernetes Service can be found [here](https://docs.aws.amazon.com/eks/latest/userguide/coredns.html).
+2. Your local system must have `golang` (the version in `go.mod`) and `make` for building the code, which you can install by following instructions [here](https://golang.org/doc/install). Code generators (`controller-gen`) and test binaries are downloaded into `./bin` by `make`; Kubebuilder itself is not required.
+3. Your local system must have Kustomize for building the Kubernetes manifests, which you can install by following instructions [here](https://kubernetes-sigs.github.io/kustomize/installation/).
+4. Your cluster must be running CoreDNS instead of kube-dns, which may not be the case if you are using a managed Kubernetes service. [This article](https://medium.com/google-cloud/using-coredns-on-gke-3973598ab561) provides some help for GCP Kubernetes Engine, and guidance for AWS Elastic Kubernetes Service can be found [here](https://docs.aws.amazon.com/eks/latest/userguide/coredns.html).
+
+## Development
+
+### Running the tests
+
+```bash
+make test
+```
+
+That's the only command you need. Go and `make` are the only prerequisites. `make test` will:
+
+1. Regenerate code and manifests with a pinned `controller-gen` (installed into `./bin`).
+2. Install [`setup-envtest`](https://pkg.go.dev/sigs.k8s.io/controller-runtime/tools/setup-envtest) into `./bin`.
+3. Download the `etcd` and `kube-apiserver` binaries for `ENVTEST_K8S_VERSION` (default `1.31.x`) into `./bin/k8s/`.
+4. Run `go test ./... -coverprofile cover.out` with `KUBEBUILDER_ASSETS` pointing at those binaries.
+
+The controller tests use [envtest](https://book.kubebuilder.io/reference/envtest.html), which starts a real
+`etcd` and `kube-apiserver`. They need no cluster and no Docker.
+
+To use envtest binaries you already have, set `KUBEBUILDER_ASSETS` yourself:
+
+```bash
+KUBEBUILDER_ASSETS=/path/to/dir/containing/etcd/and/kube-apiserver make test
+```
+
+#### Expected output
+
+```
+        github.com/monzo/egress-operator                coverage: 0.0% of statements
+        github.com/monzo/egress-operator/api/v1         coverage: 0.0% of statements
+ok      github.com/monzo/egress-operator/controllers    18s     coverage: 74.2% of statements
+```
+
+The root package and `api/v1` have no tests of their own, so `0.0%` there is expected. The `controllers`
+package should be around 70–75%. `make coverage-check` (run in CI) fails if it drops below `COVERAGE_MIN` (default 70).
+
+#### Troubleshooting
+
+| Error | Cause / fix |
+|-------|-------------|
+| `unable to start the controlplane ... fork/exec /usr/local/kubebuilder/bin/etcd: no such file or directory` | `KUBEBUILDER_ASSETS` isn't set and `go test` was run directly. Use `make test`, or `export KUBEBUILDER_ASSETS=$(./bin/setup-envtest use 1.31.x --bin-dir ./bin -p path)` first. |
+| `setup-envtest` fails to download | The binaries come from GitHub releases. Check your network or proxy, or set `KUBEBUILDER_ASSETS` to pre-downloaded binaries. |
+
+### Acceptance tests
+
+Each issue fixed in this repo has a [Robot Framework](https://robotframework.org/) suite in [`test/`](test/).
+Run them with `make robot` (needs [`uv`](https://docs.astral.sh/uv/)).
 
 ## Installing
 
