@@ -72,3 +72,7 @@ CONTROLLER_GEN=./bin/controller-gen
 else
 CONTROLLER_GEN=$(shell which controller-gen)
 endif
+
+# Fail if generated code or manifests are out of date (e.g. api/ changed without `make generate manifests`)
+verify-generated: generate manifests
+	git diff --exit-code -- api config || { echo "Generated files are stale: run 'make generate manifests' and commit the result"; exit 1; }

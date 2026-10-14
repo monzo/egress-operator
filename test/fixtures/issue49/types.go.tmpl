@@ -1,0 +1,28 @@
+// Minimal reproduction for https://github.com/monzo/egress-operator/issues/49.
+// controller-gen (v0.17.x) panics with a nil pointer dereference in
+// crd.structToSchema when a CRD spec field has an anonymous struct type.
+// Set FIELD_TYPE to a named type to see generation succeed.
+
+// +groupName=repro.example.com
+// +kubebuilder:object:generate=false
+package issue49
+
+import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+type Skews struct {
+	Zone int `json:"zone,omitempty"`
+}
+
+type ReproSpec struct {
+	// +optional
+	Skews FIELD_TYPE `json:"skews,omitempty"`
+}
+
+// +kubebuilder:object:root=true
+// +kubebuilder:resource:scope=Cluster
+type Repro struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec ReproSpec `json:"spec,omitempty"`
+}
