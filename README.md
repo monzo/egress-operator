@@ -221,3 +221,32 @@ if you set `spec.serviceTopologyMode: "None"` this will disable topology aware r
 | POD_TOPOLOGY_HOSTNAME_MAX_SKEW_KEY | `kubernetes.io/hostname`                  | Topology key for the hostname constraint                  |
 | POD_TOPOLOGY_HOSTNAME_MAX_SKEW     | Empty, won't inject a hostname constraint | Value of maxSkew for the hostname constraint              |
 | ENABLE_SERVICE_TOPOLOGY_MODE       | Empty, won't add the annotation           | Set to 'true' to add the topology mode service annotation |
+
+## FAQ
+
+### Can unrestricted workloads bypass the gateways while restricted ones use them? ([#45](https://github.com/monzo/egress-operator/issues/45))
+
+DNS rewriting by the `egressoperator` plugin applies to every client of the CoreDNS server block it's configured in.
+To rewrite only for some workloads:
+
+* Leave `hijackDns` unset (false) and have restricted workloads call the gateway Service
+  `<name>.egress-operator-system.svc.cluster.local` directly. Everyone else resolves the real address.
+* Or use the CoreDNS [`view`](https://coredns.io/plugins/view/) plugin to split the Corefile into server blocks
+  selected by client address. Only the block for restricted workloads includes `egressoperator`:
+
+  ```Caddy
+  .:53 {
+      view restricted {
+          expr incidr(client_ip(), '10.10.0.0/16')   # e.g. pod CIDR / node pool of restricted workloads
+      }
+      egressoperator egress-operator-system cluster.local
+      kubernetes cluster.local
+      forward . /etc/resolv.conf
+  }
+  .:53 {
+      kubernetes cluster.local
+      forward . /etc/resolv.conf
+  }
+  ```
+
+  Either way, keep the NetworkPolicies as the actual enforcement mechanism. DNS views are only routing.
