@@ -8,6 +8,12 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
+# Local directory for tool binaries. controller-gen is always installed here and a copy
+# already on $PATH is ignored, so `make manifests` does not depend on a C compiler.
+LOCALBIN ?= $(shell pwd)/bin
+CONTROLLER_TOOLS_VERSION ?= v0.17.0
+CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
+
 all: manager
 
 # Run tests
@@ -37,7 +43,7 @@ deploy: manifests
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen
-	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	CGO_ENABLED=0 $(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
 # Run go fmt against code
 fmt:
@@ -49,7 +55,7 @@ vet:
 
 # Generate code
 generate: controller-gen
-	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths="./..."
+	CGO_ENABLED=0 $(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths="./..."
 
 # Build the docker image
 docker-build: test
@@ -59,16 +65,13 @@ docker-build: test
 docker-push:
 	docker push ${IMG}
 
-# find or download controller-gen
-# download controller-gen if necessary
-controller-gen:
-ifeq (, $(shell which controller-gen))
-	@{ \
-	set -ex ;\
-	mkdir -p bin ;\
-	GOBIN=$$(pwd)/bin go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.17.0 ;\
-	}
-CONTROLLER_GEN=./bin/controller-gen
-else
-CONTROLLER_GEN=$(shell which controller-gen)
-endif
+# Download the pinned controller-gen into ./bin if necessary. A controller-gen already on $PATH is
+# deliberately ignored: other versions generate different output, and old ones (installed via
+# `go get` with cgo) are what broke issue #17. CGO_ENABLED=0 means no C compiler is needed.
+controller-gen: $(CONTROLLER_GEN)
+# The stamp file makes a CONTROLLER_TOOLS_VERSION change trigger a reinstall.
+$(CONTROLLER_GEN): $(LOCALBIN)/.controller-gen-$(CONTROLLER_TOOLS_VERSION)
+	CGO_ENABLED=0 GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION)
+$(LOCALBIN)/.controller-gen-$(CONTROLLER_TOOLS_VERSION):
+	mkdir -p $(LOCALBIN)
+	rm -f $(LOCALBIN)/.controller-gen-* && touch $@
