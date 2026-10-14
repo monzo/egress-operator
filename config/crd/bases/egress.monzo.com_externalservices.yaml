@@ -40,7 +40,12 @@ spec:
             description: ExternalServiceSpec defines the desired state of ExternalService
             properties:
               dnsName:
-                description: DnsName is a DNS name target for the external service
+                description: |-
+                  DnsName is a DNS name target for the external service, e.g. `api.example.com`.
+                  It must be a literal hostname: wildcards and regular expressions are not supported,
+                  because each ExternalService runs its own gateway for exactly one destination.
+                maxLength: 253
+                pattern: ^([a-zA-Z0-9_]([-a-zA-Z0-9_]*[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?\.?$
                 type: string
               envoyClusterMaxConnections:
                 description: |-

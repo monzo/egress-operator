@@ -87,6 +87,7 @@ kind: ExternalService
 metadata:
   name: google
 spec:
+  # a literal hostname; wildcards and regular expressions are rejected
   dnsName: google.com
   # optional, defaults to false, instructs dns server to rewrite queries for dnsName
   hijackDns: true
@@ -221,3 +222,12 @@ if you set `spec.serviceTopologyMode: "None"` this will disable topology aware r
 | POD_TOPOLOGY_HOSTNAME_MAX_SKEW_KEY | `kubernetes.io/hostname`                  | Topology key for the hostname constraint                  |
 | POD_TOPOLOGY_HOSTNAME_MAX_SKEW     | Empty, won't inject a hostname constraint | Value of maxSkew for the hostname constraint              |
 | ENABLE_SERVICE_TOPOLOGY_MODE       | Empty, won't add the annotation           | Set to 'true' to add the topology mode service annotation |
+
+## FAQ
+
+### Can `dnsName` be a regular expression or a wildcard? ([#23](https://github.com/monzo/egress-operator/issues/23))
+
+No. Each ExternalService gets its own Envoy gateway Deployment, Service and NetworkPolicy for exactly one destination
+hostname. The gateway proxies TCP/UDP without inspecting the traffic, so it can't tell which of several matching hosts
+a client wanted. Create one ExternalService per hostname. The CRD rejects values that aren't hostnames (for example
+`^foo\.com$` or `*.example.com`).

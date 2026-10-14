@@ -28,7 +28,11 @@ type ExternalServiceSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// DnsName is a DNS name target for the external service
+	// DnsName is a DNS name target for the external service, e.g. `api.example.com`.
+	// It must be a literal hostname: wildcards and regular expressions are not supported,
+	// because each ExternalService runs its own gateway for exactly one destination.
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:Pattern=`^([a-zA-Z0-9_]([-a-zA-Z0-9_]*[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([-a-zA-Z0-9]*[a-zA-Z0-9])?\.?$`
 	DnsName string `json:"dnsName,omitempty"`
 
 	// Ports is a list of ports on which the external service may be called
